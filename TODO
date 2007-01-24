@@ -1,2 +1,11 @@
-* Monadic CAOS token array
-* a useful language
+* Final regalloc stage
+* CAOS emitter
+* KaosM
+* Tie up main
+(celebrate!)
+* Conditionals - how to handle booleans?
+* typechecking - decorate Core type?
+* error reporting - decorate everything with location information
+* inline CAOS
+* macros
+* top-level structure of some sort (State machine?)

@@ -1,0 +1,10 @@
+Compilation pipeline:
+  String -> Parser -> AST String
+  AST String -> Renamer -> AST Slot -- STUB
+  AST Slot -> ASTToCore -> Core -- STUB
+  Core -> Typecheck -> Core -- TODO (annotate core ?)
+  Core -> Targ handling -> Core
+  Core -> ??? -> Core -- TODO ;)
+  Core -> CoreToVirt -> CAOS VirtRegister -- do we want to go back to core here?
+  CAOS VirtRegister -> RegAlloc -> CAOS CAOSRegister -- TODO
+  CAOS CAOSRegister -> Emit -> String -- TODO

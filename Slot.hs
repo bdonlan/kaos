@@ -1,96 +1,28 @@
-module Slot
-( Slot(..), SlotStateT(..), getSlotID,
-  Mutation(..), mmerge, mread, mchange, moverwrite,
-  SlotMutation(..), newSlot, linkSlotTypes
-)
-where
+module Slot (Slot(..), SlotAccess(..), AccessType(..),
+             mergeAccess, SlotAllocT, runSlotAllocT, newSlot) where
 
-import LiftST
-import Data.STRef
-import AST
-import Control.Monad.State
-import Register
-import Debug.Trace
+import SeqT
 
-data Slot s = Slot {
-    slotID :: Int,
-    slotTypeR :: STRef s ValueType,
-    getSlotType :: MonadST s m => m ValueType,
-    constrainSlotType :: MonadST s m => ValueType -> m ValueType,
-    setReg :: MonadST s m => Register s -> m (),
-    getReg :: MonadST s m => m (Maybe (Register s))
-    -- TODO
-    }
+newtype Slot = Slot Int
+    deriving (Show, Read, Eq, Ord, Enum)
 
-instance Show (Slot s) where
-    show s = "#<slot:" ++ (show $ slotID s) ++ ">"
+data SlotAccess = SA { saSlot :: Slot, saAccess :: AccessType }
+    deriving (Show, Read, Eq)
 
-getSlotID = slotID
+data AccessType = NoAccess | ReadAccess | WriteAccess | MutateAccess
+    deriving (Show, Read, Eq)
 
-instance Ord (Slot s) where
-    s `compare` s' = (slotID s) `compare` (slotID s')
-    
-instance Eq (Slot s) where
-    a == b = (a `compare` b) == EQ
+mergeAccess x y | x == y = x
+mergeAccess NoAccess x = x
+mergeAccess MutateAccess _ = MutateAccess
+mergeAccess ReadAccess WriteAccess = MutateAccess
+mergeAccess x y = mergeAccess y x
 
-class SlotStateT m where
-    newSlotID :: m Int
+newtype SlotAllocT m a = SAT (SeqT Slot m a)
+    deriving (Monad, MonadTrans)
 
-newSlot = do
-    id <- newSlotID
-    tvar <- liftST $ newSTRef vall
-    rvar <- liftST $ newSTRef Nothing
-    return $ Slot {
-        slotID = id,
-        slotTypeR = tvar,
-        getSlotType = liftST $ readSTRef tvar,
-        constrainSlotType = (\t2 -> do
-            old <- liftST $ readSTRef tvar
-            let new = old `vand` t2
-            liftST $ writeSTRef tvar new
-            if new == vnone
-                then error "unsatisfiable type constraints"
-                else return new
-                ),
-        getReg = liftST $ readSTRef rvar,
-        setReg = \r -> liftST $ writeSTRef rvar (Just r)
-        }
+newSlot :: Monad m => SlotAllocT m Slot
+newSlot = SAT getNext
 
-linkSlotTypes s1 s2 = do
-    t1 <- getSlotType s1
-    t2 <- getSlotType s2
-    let new = t1 `vand` t2
-    constrainSlotType s1 new
-    constrainSlotType s2 new
-    return new
-
-newtype Mutation = Mutation (Bool, Bool)
-    deriving (Eq, Ord)
-
-(Mutation (read, write)) `mmerge` (Mutation (read', write')) =
-    Mutation (read || read', write || write')
-
-mread = Mutation (True, False)
-mchange = Mutation (True, True)
-moverwrite = Mutation (False, True)
-
-instance Show Mutation where
-    show (Mutation (False, False)) = "#<mut:void>"
-    show (Mutation (True, False))  = "#<mut:read>"
-    show (Mutation (False, True))  = "#<mut:overwrite>"
-    show (Mutation (True, True))   = "#<mut:change>"
-
-data SlotMutation s = SM (Slot s) Mutation
-    deriving (Eq)
-
-instance Show (SlotMutation s) where
-    show (SM s m) = "#<mutate:" ++ (show s) ++ (show m) ++ ">"
-
-instance Ord (SlotMutation s) where
-    (SM s m) `compare` (SM s' m')
-        | sc == EQ
-        = m `compare` m'
-        | otherwise
-        = sc
-        where
-            sc = s `compare` s'
+runSlotAllocT :: Monad m -> SlotAllocT m a -> m a
+runSlotAllocT (SAT m) = runSeqT (Slot 0) m
