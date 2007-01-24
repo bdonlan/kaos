@@ -3,6 +3,8 @@
 * KaosM
 * Tie up main
 (celebrate!)
+* TARG (hat u) - Core->Core pass? How to model targ-caching semantics?
+  - should Slot->VirtRegister be moved to Core?
 * Conditionals - how to handle booleans?
 * typechecking - decorate Core type?
 * error reporting - decorate everything with location information
