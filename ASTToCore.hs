@@ -20,12 +20,12 @@ expToCore (EConst c) = do
     emit $ CoreConst s c
     return s
 expToCore (ELexical s) = return s
-expToCore (EBinaryOp "addv" e1 e2) = do
+expToCore (EBinaryOp op e1 e2) = do
     s1   <- expToCore e1
     s2   <- expToCore e2
     dest <- lift $ newSlot
     emit $ CoreAssign dest s1
-    emit $ CoreLine [ TokenLiteral "addv"
+    emit $ CoreLine [ TokenLiteral op
                     , TokenSlot (SA dest MutateAccess)
                     , TokenSlot (SA s2   ReadAccess)
                     ]
@@ -43,6 +43,15 @@ expToCore (ECall "print" [e]) = do
                     , TokenSlot (SA s ReadAccess)
                     ]
     return $ error "XXX: void return"
+expToCore (ECall "sqrt" [e]) = do
+    s <- expToCore e
+    result <- lift $ newSlot
+    emit $ CoreLine [ TokenLiteral "setv"
+                    , TokenSlot (SA result WriteAccess)
+                    , TokenLiteral "sqrt"
+                    , TokenSlot (SA s ReadAccess)
+                    ]
+    return result
 expToCore (ECall "__touch" [e]) = do
     s <- expToCore e
     emit $ CoreTouch (SA s MutateAccess)

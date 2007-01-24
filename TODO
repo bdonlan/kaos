@@ -1,7 +1,7 @@
-* Final regalloc stage
-* CAOS emitter
-* KaosM
-* Tie up main
+* Final regalloc stage STUBBED
+* CAOS emitter DONE-ISH
+* KaosM STUBBED
+* Tie up main DONE-ISH
 (celebrate!)
 * TARG (hat u) - Core->Core pass? How to model targ-caching semantics?
   - should Slot->VirtRegister be moved to Core?
