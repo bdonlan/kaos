@@ -6,7 +6,6 @@ import Slot
 import KaosM
 import CAOS
 
-import Control.Arrow
 import Data.List
 
 import qualified Data.Map as M

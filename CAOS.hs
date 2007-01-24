@@ -3,6 +3,7 @@ module CAOS (CAOS(..), CAOSRegister(..)) where
 data CAOSToken r =
     CAOSLiteral String
   | CAOSRegister r
+  | CAOSConst ConstValue
   deriving (Show)
 
 data CAOSLine r =
