@@ -2,11 +2,15 @@
 * CAOS emitter DONE-ISH
 * KaosM STUBBED
 * Tie up main DONE-ISH
+* internal structure pretty-printers
+* inlining expr types (SQRT etc - generalize the const subst stuff?)
+* constant folding across slots (a = 1; b = a + 1 stuff)
+* support for non-numeric types - 
+  * typechecking - decorate Core type?
+* Conditionals - how to handle booleans?
 (celebrate!)
 * TARG (hat u) - Core->Core pass? How to model targ-caching semantics?
   - should Slot->VirtRegister be moved to Core?
-* Conditionals - how to handle booleans?
-* typechecking - decorate Core type?
 * error reporting - decorate everything with location information
 * inline CAOS
 * macros
