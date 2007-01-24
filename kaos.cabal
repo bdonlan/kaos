@@ -1,0 +1,11 @@
+Name:           Kaos
+Version:        0.01
+License:        GPL
+Author:         Bryan Donlan
+Build-Depends:  base, mtl, haskell98, parsec
+Synopsis:       Kaos Compiler
+
+Executable:     kaos
+Main-Is:        Main.hs
+Hs-Source-Dirs: .
+ghc-options:  -Wall -fglasgow-exts -fno-monomorphism-restriction -fallow-undecidable-instances
