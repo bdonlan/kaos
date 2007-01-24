@@ -1,8 +1,8 @@
     a = 1.0;
     b = 1.0;
-    c = 0 - 20.0;
+    c = -20.0;
     determinant = sqrt(b * b - a * c * 4.0);
-    b = b * (0 - 1.0);
+    b = b * -1.0;
     a = a * 2.0;
     x1 = (b + determinant) / a;
     x2 = (b - determinant) / a;

@@ -89,18 +89,14 @@ table   = [
           eqop
              = Infix (do{ reservedOp "="; return $ EAssign } <?> "operator") AssocRight
 
-integerV = do
-    digits <- many1 digit
-    whiteSpace
-    return $ constInt $ read digits
+integerV = fmap (constInt . fromIntegral) $ negWrap natural
 
-floatV = do
-    digits <- many digit
-    char '.'
-    afterDot <- many digit
-    whiteSpace
-    when (digits == "" && afterDot == "") $ fail ""
-    return $ constFloat $ read (digits ++ "." ++ afterDot)
+floatV = fmap constFloat $ negWrap float
+
+negWrap :: Num n => Parser n -> Parser n
+negWrap m = do
+    neg <- (char '-' >> return negate) <|> return id
+    fmap neg m
 
 funcCall = do
     name <- identifier

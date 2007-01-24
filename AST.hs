@@ -28,7 +28,7 @@ import Utils
 data ConstValue =
     CString  String
   | CInteger Int
-  | CFloat   Float
+  | CFloat   Double
   deriving (Eq, Ord)
 
 instance Show ConstValue where
