@@ -43,5 +43,9 @@ expToCore (ECall "print" [e]) = do
                     , TokenSlot (SA s ReadAccess)
                     ]
     return $ error "XXX: void return"
+expToCore (ECall "__touch" [e]) = do
+    s <- expToCore e
+    emit $ CoreTouch (SA s MutateAccess)
+    return s
 expToCore e = error $ "ICE: can't expToCore: " ++ show e
 

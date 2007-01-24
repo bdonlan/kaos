@@ -128,8 +128,8 @@ openSourceFile file = do
 coreCompile :: Statement String -> KaosM String
 coreCompile parses =
     renameLexicals parses   >>=
-    astToCore               >>= \c -> trace ("core: " ++ show c) $
-    coreToVirt c            >>=
+    astToCore               >>=
+    coreToVirt              >>=
     regAlloc                >>=
     return . emitCaos
 
@@ -140,7 +140,6 @@ doCompile s = do
     sourceHandles <- mapM openSourceFile $ sourceFiles s
     parses <- mapM parseFile sourceHandles
     let merged = head parses
-    putStrLn $ show merged
     putStrLn =<< runCompile merged
 
 parseFile (name, handle) = do

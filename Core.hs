@@ -32,6 +32,7 @@ data CoreLine =
   | CoreAssign Slot Slot -- dest src
   | CoreConst  Slot ConstValue
   | CoreNote   Note
+  | CoreTouch  SlotAccess
   -- TODO: CoreCondition, CoreLoop etc
   deriving (Show)
 

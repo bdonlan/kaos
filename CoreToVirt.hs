@@ -65,7 +65,6 @@ data State =
   deriving (Show, Eq)
 
 type TransM = VRegAllocT (StateT (M.Map Slot State) KaosM)
-debugKM' = lift . lift . debugKM
 
 c2v b = snd $ transBlock b M.empty
 
@@ -76,6 +75,9 @@ transLine ::
     -> M.Map Slot Lookahead
     -> (M.Map Slot Lookahead, TransM [CAOSLine VirtRegister])
 transLine (CoreNote _) = returnF (return [])
+transLine (CoreTouch sm) = \future ->
+    let (future', emit') = transLine (CoreLine [TokenSlot sm]) future
+    in  (future', emit' >> return [])
 transLine line@(CoreLine l) = \future ->
     (updateLookahead future,
      emitLine future
@@ -85,10 +87,7 @@ transLine line@(CoreLine l) = \future ->
         updateLookahead future =
             foldl updateReg future access
         updateReg future (slot, access) =
-            M.alter (mergeLA' access) slot future
-        mergeLA' access oldF = 
-            let newF = mergeLA access oldF
-            in  trace ("mergeLA' for line " ++ (show line) ++ " yielding " ++ show (access, oldF, newF)) newF
+            M.alter (mergeLA access) slot future
         -- If we overwrite a register, we have an opportunity to relocate
         -- it. So we don't care what happens in the future.
         mergeLA WriteAccess _          = Nothing
@@ -107,8 +106,6 @@ transLine line@(CoreLine l) = \future ->
         mergeLA x y = error $ "ICE: mergeLA unhandled case: " ++ show (x, y)
 
         emitLine future = do
-            debugKM' ("processing line: " ++ show line)
-            debugKM' ("future: " ++ show future)
             mapM_ (realloc future) access
             s <- get
             let line = CAOSLine $ map (emitToken s) l
@@ -118,11 +115,8 @@ transLine line@(CoreLine l) = \future ->
             s <- get
             let curState  = M.lookup slot s
             let lookahead = M.lookup slot future
-            debugKM' ("realloc entry: " ++ show s)
             s' <- realloc' curState lookahead access
             modify $ M.alter (const s') slot
-            s'' <- get
-            debugKM' (show (future, slot, access, s''))
             where
                 realloc' ::
                        (Maybe State)
@@ -170,16 +164,7 @@ transLine line@(CoreConst s c) = \future ->
         updateLookahead future = M.delete s future
         emit :: M.Map Slot Lookahead
              -> TransM [CAOSLine VirtRegister]
-        emit future = debugKM' ("trans const: " ++ show (line, future)) >> do
-            st <- get
-            debugKM' $ "entry state: " ++ show st
-            debugKM' $ "private future: " ++ show (M.lookup s future :: Maybe Lookahead)
-            r <- emit' future
-            st <- get
-            debugKM' $ "exit state: " ++ show st
-            debugKM' ""
-            return r
-        emit' future =
+        emit future =
             case M.lookup s future of
                 Nothing -> do
                     zap -- We're not needed!
