@@ -1,5 +1,5 @@
 module Slot (Slot(..), SlotAccess(..), AccessType(..),
-             mergeAccess, SlotAllocT, runSlotAllocT, newSlot) where
+             mergeAccess) where
 
 import SeqT
 
@@ -18,11 +18,3 @@ mergeAccess MutateAccess _ = MutateAccess
 mergeAccess ReadAccess WriteAccess = MutateAccess
 mergeAccess x y = mergeAccess y x
 
-newtype SlotAllocT m a = SAT (SeqT Slot m a)
-    deriving (Monad, MonadTrans)
-
-newSlot :: Monad m => SlotAllocT m Slot
-newSlot = SAT getNext
-
-runSlotAllocT :: Monad m -> SlotAllocT m a -> m a
-runSlotAllocT (SAT m) = runSeqT (Slot 0) m

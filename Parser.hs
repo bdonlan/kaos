@@ -138,8 +138,8 @@ root = simpleScript
 
 simpleScript = do
     s <- many statement
-    return s
+    return $ SBlock s
     <?> "bare script"
 
-parser :: Parser [Statement]
+parser :: Parser (Statement String)
 parser = whiteSpace >> root >>> eof

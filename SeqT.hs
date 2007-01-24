@@ -4,7 +4,7 @@ import Control.Monad.State
 import Control.Monad.Trans
 
 newtype SeqT e m a = S (StateT e m a)
-    deriving (Monad, MonadTrans)
+    deriving (Monad, MonadTrans, Functor)
 
 getNext :: (Enum e, Monad m) => SeqT e m e
 getNext = S $ do

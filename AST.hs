@@ -19,9 +19,8 @@
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 -}
 module AST (
-            ValueType, vor, vand, vSubsetOf, vall, vnone, vstring, vagent, vnumber,
-            Typeable(..), ConstValue(..), Expression(..), Statement(..),
-            constInt, constFloat, constString, isPolymorphic, assignForType
+            ConstValue(..), Expression(..), Statement(..),
+            constInt, constFloat, constString,
             ) where
 
 import Utils

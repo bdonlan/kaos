@@ -1,4 +1,5 @@
-module Core (Core(..)) where
+module Core (Core, CoreBlock, CoreLine(..), lineAccess, CoreToken(..),
+             Note(..)) where
 
 import Slot
 import AST
@@ -12,7 +13,19 @@ data CoreToken =
   | TokenConst   ConstValue
   deriving (Show)
 
-lineAccess l = error "lineAccess TODO"
+lineAccess (CoreLine t)
+    = M.toList $ foldl addAccess M.empty (concatMap findAccess t)
+    where
+        findAccess (TokenSlot s) = [s]
+        findAccess _ = []
+        addAccess m (SA s ac) = M.alter updateKey s m
+            where
+            updateKey Nothing = Just ac
+            updateKey (Just a') = Just $ a' `mergeAccess` ac
+lineAccess (CoreAssign s1 s2) =
+    [(s1, WriteAccess), (s2, ReadAccess)]
+lineAccess (CoreConst s1 _) = [(s1, WriteAccess)]
+lineAccess _ = []
 
 data CoreLine =
     CoreLine [CoreToken]

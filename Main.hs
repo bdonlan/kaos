@@ -19,21 +19,25 @@
 
 module Main (main) where
 
-import Parser
+import System.IO
+import System.Environment
+import System.Exit
+import Control.Monad
 import Text.ParserCombinators.Parsec
+
 import AST
+import Core
+import CAOS
+import KaosM
+import Slot
+import VirtRegister
 
-import IO
-import System
-import Monad
-import Control.Monad.ST
-import SlotAlloc
+import Parser
+import Rename
+import ASTToCore
+import CoreToVirt
 import RegAlloc
-
---import Data.Map as Map
-
-import Chunk
-import Transform
+import Emit
 
 import Debug.Trace
 
@@ -121,21 +125,23 @@ openSourceFile file = do
     h <- openFile file ReadMode
     return (file, h)
 
-coreCompile parses = do
-    chunkTree <- runTransform $ transform parses
-    regTree <- (runSlotAlloc $ allocSlots chunkTree)
-    caosCode <- finalTranslate regTree
-    return caosCode
+coreCompile :: Statement String -> KaosM String
+coreCompile parses =
+    renameLexicals parses   >>=
+    astToCore               >>= \c -> trace ("core: " ++ show c) $
+    coreToVirt c            >>=
+    regAlloc                >>=
+    return . emitCaos
 
-runCompile s = runST (coreCompile s)
+runCompile = runKaosM . coreCompile
 
 doCompile s = do
     when ((length $ sourceFiles s) == 0) $ fail "No source files"
     sourceHandles <- mapM openSourceFile $ sourceFiles s
     parses <- mapM parseFile sourceHandles
-    let merged = concat parses
+    let merged = head parses
     putStrLn $ show merged
-    putStrLn $ runCompile merged
+    putStrLn =<< runCompile merged
 
 parseFile (name, handle) = do
     contents <- hGetContents handle
