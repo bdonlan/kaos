@@ -1,5 +1,8 @@
 module Core (Core, CoreBlock, CoreLine(..), lineAccess, CoreToken(..),
-             Note(..)) where
+             Note(..),
+             AccessType(..),
+             GenAccess(..),
+             ) where
 
 import Slot
 import AST
@@ -7,12 +10,14 @@ import qualified Data.Map as M
 
 type Note = ()
 
-data CoreToken =
+data CoreToken t =
     TokenLiteral String
-  | TokenSlot    SlotAccess
+  | TokenSlot    (GenAccess t)
   | TokenConst   ConstValue
   deriving (Show)
 
+
+lineAccess :: (Ord t, Eq t) => CoreLine t -> [(t, AccessType)]
 lineAccess (CoreLine t)
     = M.toList $ foldl addAccess M.empty (concatMap findAccess t)
     where
@@ -27,14 +32,27 @@ lineAccess (CoreAssign s1 s2) =
 lineAccess (CoreConst s1 _) = [(s1, WriteAccess)]
 lineAccess _ = []
 
-data CoreLine =
-    CoreLine [CoreToken]
-  | CoreAssign Slot Slot -- dest src
-  | CoreConst  Slot ConstValue
+data CoreLine t =
+    CoreLine [CoreToken t]
+  | CoreAssign t t -- dest src
+  | CoreConst  t ConstValue
   | CoreNote   Note
-  | CoreTouch  SlotAccess
+  | CoreTouch  (GenAccess t)
   -- TODO: CoreCondition, CoreLoop etc
   deriving (Show)
 
-type CoreBlock = [CoreLine]
-type Core = CoreBlock
+type CoreBlock t = [CoreLine t]
+type Core t = CoreBlock t
+
+data GenAccess t = SA t AccessType
+    deriving (Show, Ord, Eq)
+
+data AccessType = NoAccess | ReadAccess | WriteAccess | MutateAccess
+    deriving (Show, Ord, Eq)
+
+mergeAccess x y | x == y = x
+mergeAccess NoAccess x = x
+mergeAccess MutateAccess _ = MutateAccess
+mergeAccess ReadAccess WriteAccess = MutateAccess
+mergeAccess x y = mergeAccess y x
+

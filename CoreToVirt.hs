@@ -14,7 +14,7 @@ import Control.Monad.State hiding (State)
 
 import qualified Data.Map as M
 
-coreToVirt :: Core -> KaosM (CAOS VirtRegister)
+coreToVirt :: Core Slot -> KaosM (CAOS VirtRegister)
 coreToVirt c = evalStateT (runVRegAllocT $ c2v c) M.empty
 
 mapDual f = concatDual . map f
@@ -71,7 +71,7 @@ c2v b = snd $ transBlock b M.empty
 transBlock b = liftF (liftM concat) $ mapDualM transLine b
 
 transLine ::
-       CoreLine
+       CoreLine Slot
     -> M.Map Slot Lookahead
     -> (M.Map Slot Lookahead, TransM [CAOSLine VirtRegister])
 transLine (CoreNote _) = returnF (return [])
@@ -143,7 +143,7 @@ transLine line@(CoreLine l) = \future ->
                 realloc' s@(Just _) _ ReadAccess
                     = return s
                 realloc' s l a = error $ "ICE: realloc: unhandled case: " ++ show (s,l,a)
-        emitToken :: M.Map Slot State -> CoreToken -> CAOSToken VirtRegister
+        emitToken :: M.Map Slot State -> CoreToken Slot -> CAOSToken VirtRegister
         emitToken s (TokenLiteral l) = CAOSLiteral l
         emitToken s (TokenConst   c) = CAOSConst c
         emitToken s (TokenSlot (SA r _)) = r'

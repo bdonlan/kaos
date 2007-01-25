@@ -6,7 +6,7 @@ import Slot
 import KaosM
 import Control.Monad.Writer
 
-astToCore :: Statement Slot -> KaosM CoreBlock
+astToCore :: Statement Slot -> KaosM (CoreBlock Slot)
 astToCore (SExpr e) = do
     (_, out) <- runWriterT $ expToCore e
     return out
@@ -14,7 +14,7 @@ astToCore (SBlock st) = fmap concat $ mapM astToCore st
 
 emit x = tell [x]
 
-expToCore :: Expression Slot -> WriterT CoreBlock KaosM Slot
+expToCore :: Expression Slot -> WriterT (CoreBlock Slot) KaosM Slot
 expToCore (EConst c) = do
     s <- lift $ newSlot
     emit $ CoreConst s c
