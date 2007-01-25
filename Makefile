@@ -5,7 +5,8 @@ all: .setup-config
 	runhaskell Setup.lhs configure
 
 clean:
-	runhaskell Setup.lhs clean
+	[ -e .setup-config ] && runhaskell Setup.lhs clean
+	rm -rf dist
 	rm -f kaos *.o *.hi *~
 
 .PHONY: clean all
