@@ -16,6 +16,11 @@ data CoreToken t =
   | TokenConst   ConstValue
   deriving (Show)
 
+instance Functor CoreToken where
+    fmap f (TokenSlot (SA t a)) = TokenSlot (SA (f t) a)
+    fmap _ (TokenLiteral s)     = TokenLiteral s
+    fmap _ (TokenConst c)       = TokenConst c
+
 
 lineAccess :: (Ord t, Eq t) => CoreLine t -> [(t, AccessType)]
 lineAccess (CoreLine t)
@@ -40,6 +45,13 @@ data CoreLine t =
   | CoreTouch  (GenAccess t)
   -- TODO: CoreCondition, CoreLoop etc
   deriving (Show)
+
+instance Functor CoreLine where
+    fmap f (CoreLine l) = CoreLine $ map (fmap f) l
+    fmap f (CoreAssign dest src) = CoreAssign (f dest) (f src)
+    fmap f (CoreConst dest cv) = CoreConst (f dest) cv
+    fmap f (CoreTouch (SA s a)) = CoreTouch (SA (f s) a)
+    fmap _ (CoreNote n) = CoreNote n
 
 type CoreBlock t = [CoreLine t]
 type Core t = CoreBlock t

@@ -64,23 +64,32 @@ data State =
   | Const   ConstValue
   deriving (Show, Eq)
 
+type SlotStorage = Maybe State
+type SlotFuture  = Maybe Lookahead
+
 type TransM = VRegAllocT (StateT (M.Map Slot State) KaosM)
+type MarkedLine = CoreLine (SlotStorage, Slot, SlotFuture)
+type MarkedBlock = CoreBlock (SlotStorage, Slot, SlotFuture)
 
-c2v b = snd $ transBlock b M.empty
+c2v b = do
+    marked <- snd $ markBlock b M.empty
+    transBlock marked
 
-transBlock b = liftF (liftM concat) $ mapDualM transLine b
+markBlock b = mapDualM markLine b
 
-transLine ::
+markLine ::
        CoreLine Slot
     -> M.Map Slot Lookahead
-    -> (M.Map Slot Lookahead, TransM [CAOSLine VirtRegister])
-transLine (CoreNote _) = returnF (return [])
-transLine (CoreTouch sm) = \future ->
-    let (future', emit') = transLine (CoreLine [TokenSlot sm]) future
-    in  (future', emit' >> return [])
-transLine line@(CoreLine l) = \future ->
+    -> (M.Map Slot Lookahead, TransM (CoreLine (SlotStorage, Slot, SlotFuture)))
+markLine n@(CoreNote note) = returnF (return (CoreNote note))
+markLine (CoreTouch sa@(SA s a)) = \future ->
+    let (future', emit') = markLine (CoreLine [TokenSlot sa]) future
+    in  (future', do CoreLine [TokenSlot sa'] <- emit'
+                     return (CoreTouch sa')
+        )
+markLine line@(CoreLine l) = \future ->
     (updateLookahead future,
-     emitLine future
+     doMark future
     )
     where
         access = lineAccess line
@@ -105,11 +114,12 @@ transLine line@(CoreLine l) = \future ->
         mergeLA NoAccess x             = x
         mergeLA x y = error $ "ICE: mergeLA unhandled case: " ++ show (x, y)
 
-        emitLine future = do
+        doMark :: M.Map Slot Lookahead -> TransM (CoreLine (SlotStorage, Slot, SlotFuture))
+        doMark future = do
             mapM_ (realloc future) access
             s <- get
-            let line = CAOSLine $ map (emitToken s) l
-            return [line]
+            let line = CoreLine $ map (markToken s future) l
+            return line
 
         realloc future (slot, access) = do
             s <- get
@@ -143,19 +153,13 @@ transLine line@(CoreLine l) = \future ->
                 realloc' s@(Just _) _ ReadAccess
                     = return s
                 realloc' s l a = error $ "ICE: realloc: unhandled case: " ++ show (s,l,a)
-        emitToken :: M.Map Slot State -> CoreToken Slot -> CAOSToken VirtRegister
-        emitToken s (TokenLiteral l) = CAOSLiteral l
-        emitToken s (TokenConst   c) = CAOSConst c
-        emitToken s (TokenSlot (SA r _)) = r'
-            where
-                r' = case M.lookup r s of
-                        Nothing -> error $ "ICE: emitToken: reg lookup FAILED: " ++ show (r, s)
-                        Just (Private r_) -> CAOSRegister r_
-                        Just (Shared  r_) -> CAOSRegister r_
-                        Just (Const   cv) -> CAOSConst cv
+        markToken :: M.Map Slot State -> M.Map Slot Lookahead -> CoreToken Slot -> CoreToken (SlotStorage, Slot, SlotFuture)
+        markToken s future (TokenLiteral l) = TokenLiteral l
+        markToken s future (TokenConst   c) = TokenConst c
+        markToken s future (TokenSlot (SA r a)) = TokenSlot (SA (M.lookup r s, r, M.lookup r future) a)
 
                 
-transLine line@(CoreConst s c) = \future ->
+markLine line@(CoreConst s c) = \future ->
     (updateLookahead future, emit future)
     where
         verb = "setv" -- XXX
@@ -163,44 +167,37 @@ transLine line@(CoreConst s c) = \future ->
         -- This is a write operation, so nuke our entry
         updateLookahead future = M.delete s future
         emit :: M.Map Slot Lookahead
-             -> TransM [CAOSLine VirtRegister]
+             -> TransM MarkedLine
         emit future =
             case M.lookup s future of
                 Nothing -> do
                     zap -- We're not needed!
-                    return []
+                    markMe future
                 Just (Bound r) -> do
                     modify $ M.insert s (Private r)
-                    return [CAOSLine $
-                            [CAOSLiteral verb
-                            ,CAOSRegister r
-                            ,CAOSConst c
-                            ]
-                           ]
+                    markMe future
                 Just Read -> do -- yay const propagation!
                     modify $ M.insert s (Const c)
-                    return []
+                    markMe future
                 Just Mutate -> do
                     r <- newVReg
                     modify $ M.insert s (Private r)
-                    return [CAOSLine $
-                            [CAOSLiteral verb
-                            ,CAOSRegister r
-                            ,CAOSConst c
-                            ]
-                           ]
+                    markMe future
+        markMe future = do
+            st <- get
+            return $ CoreConst (M.lookup s st, s, M.lookup s future) c
 
-transLine core@(CoreAssign s2 s1) = \future ->
+markLine core@(CoreAssign dest src) = \future ->
     (updateLookahead future, emit future)
     where
         verb = "setv" -- XXX
         
         updateLookahead future =
-            let s1f  = M.lookup s1 future
-                s2f  = M.lookup s2 future
-                s1f' = updSrc  s1f s2f
-                s2f' = updDest s1f s2f 
-            in  M.alter (const s1f') s1 $ M.alter (const s2f') s2 future
+            let srcf  = M.lookup src future
+                destf  = M.lookup dest future
+                srcf' = updSrc  srcf destf
+                destf' = updDest srcf destf 
+            in  M.alter (const srcf') src $ M.alter (const destf') dest future
         
         updSrc :: Maybe Lookahead
                -> Maybe Lookahead
@@ -218,11 +215,15 @@ transLine core@(CoreAssign s2 s1) = \future ->
         updDest _ _ = Nothing
 
         emit :: M.Map Slot Lookahead
-             -> TransM [CAOSLine VirtRegister]
+             -> TransM MarkedLine
         emit future =
-            let s1f  = M.lookup s1 future
-                s2f  = M.lookup s2 future
-            in  doAssign s1f s2f
+            let srcf  = M.lookup src future
+                destf  = M.lookup dest future
+            in  do
+                    doAssign srcf destf
+                    s <- get
+                    return $ CoreAssign (M.lookup dest s, dest, destf)
+                                        (M.lookup src  s,  src,  srcf)
 
         makeShared Nothing     = error $ "transLine CoreAssign: State was Nothing when making shared in " ++ show core
         makeShared (Just (Private r)) = Just $ Shared r
@@ -230,45 +231,71 @@ transLine core@(CoreAssign s2 s1) = \future ->
 
         doAssign :: Maybe Lookahead
                  -> Maybe Lookahead
-                 -> TransM [CAOSLine VirtRegister]
+                 -> TransM ()
         -- Case 1: The source register is not being used later.
         --   Rename the source over the dest and leave it at that.
         doAssign Nothing _ = do
             s <- get
-            modify $ M.alter (const $ M.lookup s1 s) s2
-            modify $ M.delete s1
-            return []
+            modify $ M.alter (const $ M.lookup src s) dest
+            modify $ M.delete src
         -- Maybe we're not needed at all?
         doAssign _ Nothing = do
-            modify $ M.delete s2
-            return []
+            modify $ M.delete dest
         -- Not as nice, but okay, it's read-only, so we can alias
         doAssign (Just Read) (Just Read) = do
-            modify $ M.alter makeShared s1
+            modify $ M.alter makeShared src
             s <- get
-            modify $ M.alter (const $ M.lookup s1 s) s2
-            return []
+            modify $ M.alter (const $ M.lookup src s) dest
         -- Otherwise, one or the other's getting overwritten, so fix it now.
         -- In the case of a bound variable, we have the register already.
         doAssign _ (Just (Bound r)) = assignTo r
         doAssign _ _ = do
             r <- newVReg
             assignTo r
-
-        assignTo :: VirtRegister
-                 -> TransM [CAOSLine VirtRegister]
-        -- Perform copying assignment. Slot 2's new register is in r
         assignTo r = do
-            modify $ M.alter (const $ Just $ Private r) s2
-            s <- get
-            s1r <- case (M.lookup s1 s) of
-                        Just (Private r) -> return $ CAOSRegister r
-                        Just (Shared r) -> return $ CAOSRegister r
-                        Just (Const c) -> return $ CAOSConst c
-                        x -> fail $ "ICE: assignTo: impossible s1 state: " ++ show x
-            return [CAOSLine
-                    [CAOSLiteral verb
-                    ,CAOSRegister r
-                    ,s1r
-                    ]
-                   ]
+            modify $ M.alter (const $ Just $ Private r) dest
+
+transBlock :: MarkedBlock -> TransM (CAOSBlock VirtRegister)
+transBlock = liftM concat . mapM transLine
+
+transLine :: MarkedLine -> TransM [CAOSLine VirtRegister]
+transLine (CoreNote n) = return []
+transLine (CoreTouch _) = return []
+transLine line@(CoreLine l) = do
+        tokens <- mapM transToken l
+        return [CAOSLine tokens]
+    where
+        transToken (TokenLiteral l) = return $ CAOSLiteral l
+        transToken (TokenConst c) = return $ CAOSConst c
+        transToken (TokenSlot (SA (storage, _, _) _)) = transStorage storage
+        transStorage (Just (Private r)) = return $ CAOSRegister r
+        transStorage (Just (Shared r)) = return $ CAOSRegister r
+        transStorage (Just (Const c)) = return $ CAOSConst c
+        transStorage x = fail $ "transLine: register storage in bad state: " ++ show line
+transLine (CoreConst s@(storage, _, _) c) = checkAssign storage
+    where
+        verb = "SETV" -- XXX
+        checkAssign (Just (Private r)) = doAssign r
+        checkAssign (Just (Const _))   = return []
+        checkAssign Nothing            = return []
+        checkAssign x                  = fail $ "doConstAssign: unexpected storage " ++ show x
+        doAssign r = return [ CAOSLine [CAOSLiteral verb, CAOSRegister r, CAOSConst c] ]
+transLine l@(CoreAssign (destStorage, dest, destFuture) (srcStorage, src, srcFuture)) =
+    checkAssign destStorage destFuture srcStorage srcFuture
+    where
+        verb = "SETV" -- XXX
+        checkAssign _ _ _ Nothing = return [] -- rename
+        checkAssign (Just (Shared _)) _ _ _ = return [] -- alias
+        checkAssign _ Nothing _ _ = return [] -- unused
+        checkAssign (Just (Private r)) _ (Just srcStorage) _ = doAssign r srcStorage
+
+        checkAssign _ _ _ _ = fail $ "checkAssign: impossible state " ++ show l
+
+        doAssign r (Private s) = do
+            return [ CAOSLine [CAOSLiteral verb, CAOSRegister r, CAOSRegister s] ]
+
+        doAssign r (Shared s) = do
+            return [ CAOSLine [CAOSLiteral verb, CAOSRegister r, CAOSRegister s] ]
+
+        doAssign r (Const cv) = do
+            return [ CAOSLine [CAOSLiteral verb, CAOSRegister r, CAOSConst cv] ]

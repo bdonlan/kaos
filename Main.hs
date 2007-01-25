@@ -129,6 +129,8 @@ coreCompile :: Statement String -> KaosM String
 coreCompile parses =
     renameLexicals parses   >>=
     astToCore               >>=
+--    markCoreFutures         >>= -- TODO
+--    markCoreAllocation      >>= -- TODO
     coreToVirt              >>=
     regAlloc                >>=
     return . emitCaos
