@@ -26,7 +26,6 @@ module AST (
             constType,
             ) where
 
-import Utils
 import Data.List
 
 data ConstValue =
