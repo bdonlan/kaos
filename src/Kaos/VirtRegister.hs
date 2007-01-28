@@ -1,6 +1,6 @@
-module VirtRegister (VirtRegister(..), VRegAllocT, runVRegAllocT, newVReg) where
+module Kaos.VirtRegister (VirtRegister(..), VRegAllocT, runVRegAllocT, newVReg) where
 
-import SeqT
+import Kaos.SeqT
 import Control.Monad.Trans
 import Control.Monad.State
 

@@ -18,7 +18,7 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 -}
-module AST (
+module Kaos.AST (
             ConstValue(..), Expression(..), Statement(..),
             constInt, constFloat, constString,
             CAOSType, typeAnd, typeOr,
@@ -27,7 +27,7 @@ module AST (
             ) where
 
 import Data.List
-import PrettyM
+import Kaos.PrettyM
 
 data ConstValue =
     CString  String

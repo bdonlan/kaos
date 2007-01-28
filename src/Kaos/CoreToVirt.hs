@@ -1,14 +1,14 @@
-module CoreToVirt (coreToVirt) where
+module Kaos.CoreToVirt (coreToVirt) where
 
-import AST
-import Core
-import VirtRegister
-import Slot
-import KaosM
-import CAOS
+import Kaos.AST
+import Kaos.Core
+import Kaos.VirtRegister
+import Kaos.Slot
+import Kaos.KaosM
+import Kaos.CAOS
 
-import CoreFuture
-import CoreStorage
+import Kaos.CoreFuture
+import Kaos.CoreStorage
 
 import Data.List
 import Data.Maybe

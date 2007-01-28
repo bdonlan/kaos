@@ -1,14 +1,14 @@
-module CoreStorage (markStorage, Storage(..), SlotStorage, MarkedBlock, MarkedLine) where
+module Kaos.CoreStorage (markStorage, Storage(..), SlotStorage, MarkedBlock, MarkedLine) where
 
-import Core
-import Slot
-import KaosM
+import Kaos.Core
+import Kaos.Slot
+import Kaos.KaosM
 import Data.List
 import Data.Maybe
 import Control.Monad.State hiding (State)
-import CoreFuture
-import VirtRegister
-import AST
+import Kaos.CoreFuture
+import Kaos.VirtRegister
+import Kaos.AST
 
 import qualified Data.Map as M
 

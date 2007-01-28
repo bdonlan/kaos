@@ -1,11 +1,11 @@
-module Rename (renameLexicals) where
+module Kaos.Rename (renameLexicals) where
 
 import Control.Monad.State
-import AST
-import Slot
+import Kaos.AST
+import Kaos.Slot
 import qualified Data.Map as M
 
-import KaosM
+import Kaos.KaosM
 
 type RenameT = StateT (M.Map String Slot) KaosM
 

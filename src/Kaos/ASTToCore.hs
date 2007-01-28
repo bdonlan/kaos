@@ -1,11 +1,11 @@
-module ASTToCore (astToCore) where
+module Kaos.ASTToCore (astToCore) where
 
-import Core
-import AST
-import Slot
-import KaosM
+import Kaos.Core
+import Kaos.AST
+import Kaos.Slot
+import Kaos.KaosM
 import Control.Monad.Writer
-import Typecheck
+import Kaos.Typecheck
 
 astToCore :: MonadKaos m => Statement Slot -> TypeCheckT m (Core Slot)
 astToCore (SExpr e) = do

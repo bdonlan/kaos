@@ -1,14 +1,14 @@
-module Typecheck (
+module Kaos.Typecheck (
     typecheck, TypeCheckT, sameType, typeIs
     ) where
 
-import KaosM
+import Kaos.KaosM
 import Control.Monad.State
 import Control.Monad.Writer
 import Control.Monad.Reader
-import Core
-import AST
-import Slot
+import Kaos.Core
+import Kaos.AST
+import Kaos.Slot
 import Data.Maybe
 
 import qualified Data.Map as M

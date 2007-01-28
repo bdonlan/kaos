@@ -1,8 +1,8 @@
-module RegAlloc (regAlloc) where
+module Kaos.RegAlloc (regAlloc) where
 
-import CAOS
-import VirtRegister
-import KaosM
+import Kaos.CAOS
+import Kaos.VirtRegister
+import Kaos.KaosM
 
 -- XXX STUB
 regAlloc :: CAOS VirtRegister -> KaosM (CAOS CAOSRegister)

@@ -17,7 +17,7 @@
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 -}
 
-module Parser ( parser ) where
+module Kaos.Parser ( parser ) where
 
 import Text.ParserCombinators.Parsec
 import qualified Text.ParserCombinators.Parsec.Token as P
@@ -25,7 +25,7 @@ import qualified Text.ParserCombinators.Parsec.Pos as Pos
 import Text.ParserCombinators.Parsec.Language
 import Text.ParserCombinators.Parsec.Expr
 import Monad (liftM, when)
-import AST
+import Kaos.AST
 import Debug.Trace
 
 import qualified IO

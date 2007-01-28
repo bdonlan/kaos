@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fglasgow-exts #-}
-module PrettyM (PrettyM, runPretty, emitLine, newLine, withIndent, prefixFirst, prefixAll) where
+module Kaos.PrettyM (PrettyM, runPretty, emitLine, newLine, withIndent, prefixFirst, prefixAll) where
 
 import Control.Monad
 import Control.Monad.Reader

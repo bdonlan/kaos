@@ -1,12 +1,12 @@
-module CoreFuture (markFuture, Lookahead(..), Future) where
+module Kaos.CoreFuture (markFuture, Lookahead(..), Future) where
 
-import Core
-import Slot
-import KaosM
+import Kaos.Core
+import Kaos.Slot
+import Kaos.KaosM
 import Data.List
 import Data.Maybe
 import Control.Monad.State hiding (State)
-import VirtRegister
+import Kaos.VirtRegister
 
 import qualified Data.Map as M
 

@@ -1,7 +1,7 @@
-module Emit (emitCaos) where
+module Kaos.Emit (emitCaos) where
 
-import CAOS
-import AST
+import Kaos.CAOS
+import Kaos.AST
 import Data.Char
 
 --- XXX unflattenable

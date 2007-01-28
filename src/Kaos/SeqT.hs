@@ -1,4 +1,4 @@
-module SeqT (SeqT, getNext, runSeqT) where
+module Kaos.SeqT (SeqT, getNext, runSeqT) where
 
 import Control.Monad.State
 import Control.Monad.Trans

@@ -1,7 +1,7 @@
-module KaosM (runKaosM, KaosM, newSlot, debugKM, MonadKaos(..)) where
+module Kaos.KaosM (runKaosM, KaosM, newSlot, debugKM, MonadKaos(..)) where
 
-import SeqT
-import Slot
+import Kaos.SeqT
+import Kaos.Slot
 import Control.Monad.Identity
 import Control.Monad.Trans
 import Control.Monad.Reader

@@ -24,23 +24,23 @@ import System.Environment
 import System.Exit
 import Control.Monad
 import Text.ParserCombinators.Parsec
-import Typecheck
+import Kaos.Typecheck
 
-import AST
-import Core
-import CAOS
-import KaosM
-import Slot
-import VirtRegister
+import Kaos.AST
+import Kaos.Core
+import Kaos.CAOS
+import Kaos.KaosM
+import Kaos.Slot
+import Kaos.VirtRegister
 
-import Parser
-import Rename
-import ASTToCore
-import CoreToVirt
-import CoreFuture
-import CoreStorage
-import RegAlloc
-import Emit
+import Kaos.Parser
+import Kaos.Rename
+import Kaos.ASTToCore
+import Kaos.CoreToVirt
+import Kaos.CoreFuture
+import Kaos.CoreStorage
+import Kaos.RegAlloc
+import Kaos.Emit
 
 import Debug.Trace
 

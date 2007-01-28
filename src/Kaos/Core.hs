@@ -1,4 +1,4 @@
-module Core (Core, CoreBlock, CoreLine(..), lineAccess, CoreToken(..),
+module Kaos.Core (Core, CoreBlock, CoreLine(..), lineAccess, CoreToken(..),
              Note(..),
              AccessType(..),
              GenAccess(..),
@@ -6,8 +6,8 @@ module Core (Core, CoreBlock, CoreLine(..), lineAccess, CoreToken(..),
              dumpCore
              ) where
 
-import Slot
-import AST
+import Kaos.Slot
+import Kaos.AST
 import qualified Data.Map as M
 
 type Note = ()

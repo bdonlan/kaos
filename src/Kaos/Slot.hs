@@ -1,6 +1,6 @@
-module Slot (Slot(..)) where
+module Kaos.Slot (Slot(..)) where
 
-import AST
+import Kaos.AST
 import Data.Ord
 
 data Slot = Slot { slotId :: Int

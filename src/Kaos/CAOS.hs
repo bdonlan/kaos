@@ -1,8 +1,8 @@
-module CAOS (CAOS, CAOSBlock, CAOSLine(..), CAOSToken(..),
+module Kaos.CAOS (CAOS, CAOSBlock, CAOSLine(..), CAOSToken(..),
              CAOSRegister(..)) where
 
 import Data.Ix
-import AST
+import Kaos.AST
 
 data CAOSToken r =
     CAOSLiteral String
