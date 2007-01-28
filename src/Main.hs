@@ -37,6 +37,8 @@ import Parser
 import Rename
 import ASTToCore
 import CoreToVirt
+import CoreFuture
+import CoreStorage
 import RegAlloc
 import Emit
 
@@ -130,8 +132,8 @@ coreCompile :: Statement String -> KaosM String
 coreCompile parses =
     renameLexicals parses   >>=
     typecheck . astToCore   >>=
---    markCoreFutures         >>= -- TODO
---    markCoreAllocation      >>= -- TODO
+    markFuture              >>=
+    markStorage             >>=
     coreToVirt              >>=
     regAlloc                >>=
     return . emitCaos
