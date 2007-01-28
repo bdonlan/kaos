@@ -31,5 +31,5 @@ newSlot = liftK $ KM getNext
 debugKM :: MonadKaos m => String -> m ()
 debugKM s = liftK $ KM (lift $ putStrLn s)
 
-runKaosM (KM m) = runSeqT (Slot 0) m
+runKaosM (KM m) = runSeqT (toEnum 0) m
 

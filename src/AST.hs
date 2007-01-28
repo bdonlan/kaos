@@ -21,9 +21,13 @@
 module AST (
             ConstValue(..), Expression(..), Statement(..),
             constInt, constFloat, constString,
+            CAOSType, typeAnd, typeOr,
+            typeAny, typeNum, typeStr, typeObj, typeVoid,
+            constType,
             ) where
 
 import Utils
+import Data.List
 
 data ConstValue =
     CString  String
@@ -52,3 +56,39 @@ data Statement l =
     SExpr  (Expression l)
   | SBlock [Statement l] 
     deriving (Eq, Ord, Show)
+
+data CAOSType = CAOSType { ctNum :: Bool
+                         , ctStr :: Bool
+                         , ctObj :: Bool
+                         }
+                         deriving (Eq, Ord)
+
+instance Show CAOSType where
+    show t = "<type:" ++ ts ++ ">"
+        where
+            ts
+                | t == typeVoid
+                = "void"
+                | otherwise
+                = concat $ intersperse "|" typeStrs
+            typeStrs = map snd $ filter (typeMatches t . fst) typeNames
+            typeNames = [(typeNum, "numeric"),
+                         (typeStr, "string"),
+                         (typeObj, "object")]
+
+typeAnd (CAOSType a b c) (CAOSType a' b' c')
+    = CAOSType (a && a') (b && b') (c && c')
+typeOr (CAOSType a b c) (CAOSType a' b' c')
+    = CAOSType (a || a') (b || b') (c || c')
+
+typeMatches a b = typeVoid /= (a `typeAnd` b)
+
+typeAny = CAOSType True True True
+typeNum = CAOSType True False False
+typeStr = CAOSType False True False
+typeObj = CAOSType False False True
+typeVoid = CAOSType False False False
+
+constType (CInteger _) = typeNum
+constType (CFloat _) = typeNum
+constType (CString _) = typeStr
