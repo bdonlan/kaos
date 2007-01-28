@@ -24,6 +24,7 @@ import System.Environment
 import System.Exit
 import Control.Monad
 import Text.ParserCombinators.Parsec
+import Typecheck
 
 import AST
 import Core
@@ -128,7 +129,7 @@ openSourceFile file = do
 coreCompile :: Statement String -> KaosM String
 coreCompile parses =
     renameLexicals parses   >>=
-    astToCore               >>=
+    typecheck . astToCore   >>=
 --    markCoreFutures         >>= -- TODO
 --    markCoreAllocation      >>= -- TODO
     coreToVirt              >>=

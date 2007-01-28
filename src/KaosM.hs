@@ -1,4 +1,4 @@
-module KaosM (runKaosM, KaosM, newSlot, debugKM) where
+module KaosM (runKaosM, KaosM, newSlot, debugKM, MonadKaos(..)) where
 
 import SeqT
 import Slot
