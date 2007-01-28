@@ -2,6 +2,8 @@ module Core (Core, CoreBlock, CoreLine(..), lineAccess, CoreToken(..),
              Note(..),
              AccessType(..),
              GenAccess(..),
+             coreNormalize,
+             dumpCore
              ) where
 
 import Slot
@@ -47,6 +49,11 @@ data CoreLine t =
   | CoreConst  t ConstValue
   | CoreNote   Note
   | CoreTouch  (GenAccess t)
+  | CoreTypeSwitch { ctsSlot :: t
+                   , ctsNum  :: CoreLine t
+                   , ctsStr  :: CoreLine t
+                   , ctsObj  :: CoreLine t
+                   }
   -- TODO: CoreCondition, CoreLoop etc
   deriving (Show)
 
@@ -55,7 +62,20 @@ instance Functor CoreLine where
     fmap f (CoreAssign dest src) = CoreAssign (f dest) (f src)
     fmap f (CoreConst dest cv) = CoreConst (f dest) cv
     fmap f (CoreTouch (SA s a)) = CoreTouch (SA (f s) a)
+    fmap f (CoreTypeSwitch s cn cs co) = CoreTypeSwitch (f s) (fmap f cn) (fmap f cs) (fmap f co)
     fmap _ (CoreNote n) = CoreNote n
+
+lineNormalize (CoreTypeSwitch s cn cs co)
+    | slotType s == typeNum
+    = lineNormalize cn
+    | slotType s == typeStr
+    = lineNormalize cs
+    | slotType s == typeObj
+    = lineNormalize co
+lineNormalize l = l
+
+coreNormalize :: Core Slot -> Core Slot
+coreNormalize = map lineNormalize
 
 type CoreBlock t = [CoreLine t]
 type Core t = CoreBlock t

@@ -70,8 +70,8 @@ constrainSlotType t slot = do
 bindSlots s1 s2 = do
     t1 <- getSlotType s1
     t2 <- getSlotType s2
-    constrainSlotType t1 s1
-    constrainSlotType t2 s2
+    when (t2 /= typeAny) $ constrainSlotType t2 s1
+    when (t1 /= typeAny) $ constrainSlotType t1 s2
     var1 <- getSlotVar s1
     var2 <- getSlotVar s2
     
@@ -90,5 +90,5 @@ typecheck (TCT m) = do
     flip evalStateT initSt $ do
     sequence_ annotations
     s <- get
-    return $ fmap (fmap $ translateSlot s) core
+    return . coreNormalize $ fmap (fmap $ translateSlot s) core
 

@@ -254,6 +254,8 @@ markLine core@(CoreAssign dest src) = \future ->
             assignTo r
         assignTo r = do
             modify $ M.alter (const $ Just $ Private r) dest
+markLine l = fail $ "Unknown linepattern: " ++ show l
+
 
 transBlock :: MarkedBlock -> TransM (CAOSBlock VirtRegister)
 transBlock = liftM concat . mapM transLine

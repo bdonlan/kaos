@@ -17,5 +17,5 @@ emitToken r@(CAOSRegister (CAOSReg i)) =
 emitToken (CAOSConst cv) = emitConst cv
 
 emitConst (CInteger i) = show i
-emitConst (CString s) = show s
+emitConst (CString s) = s
 emitConst (CFloat f) = show f

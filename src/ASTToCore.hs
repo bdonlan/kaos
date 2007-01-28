@@ -44,13 +44,15 @@ expToCore (EAssign e1 e2) = do
     s1 `sameType` s2
     emit $ CoreAssign s1 s2
     return s1
-expToCore (ECall "print" [e]) = do
-    s <- expToCore e
-    s `typeIs` typeNum -- XXX
-    emit $ CoreLine [ TokenLiteral "outv"
-                    , TokenSlot (SA s ReadAccess)
-                    ]
+expToCore (ECall "print" []) = 
     return $ error "XXX: void return"
+expToCore (ECall "print" (h:t)) = do
+    s <- expToCore h
+    emit $ CoreTypeSwitch s (pt "outv" s) (pt "outs" s) pf
+    expToCore (ECall "print" t)
+    where
+        pt verb slot = CoreLine [TokenLiteral verb, TokenSlot (SA slot ReadAccess)]
+        pf = CoreLine [TokenLiteral "outs", TokenConst (CString "<object>")]
 expToCore (ECall "sqrt" [e]) = do
     s <- expToCore e
     result <- newSlot
