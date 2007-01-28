@@ -2,13 +2,14 @@ module Emit (emitCaos) where
 
 import CAOS
 import AST
+import Data.Char
 
 --- XXX unflattenable
 emitCaos c = unlines $ map emitLine c
 
 emitLine (CAOSLine l) = unwords $ map emitToken l
 
-emitToken (CAOSLiteral s) = s
+emitToken (CAOSLiteral s) = map toUpper s
 emitToken r@(CAOSRegister (CAOSReg i)) =
     case show i of
         s@[_] -> "VA0" ++ s
