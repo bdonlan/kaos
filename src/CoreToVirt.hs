@@ -276,28 +276,49 @@ transLine line@(CoreLine l) = do
         transStorage x = fail $ "transLine: register storage in bad state: " ++ show line
 transLine (CoreConst s@(storage, _, _) c) = checkAssign storage
     where
-        verb = "SETV" -- XXX
         checkAssign (Just (Private r)) = doAssign r
         checkAssign (Just (Const _))   = return []
         checkAssign Nothing            = return []
         checkAssign x                  = fail $ "doConstAssign: unexpected storage " ++ show x
-        doAssign r = return [ CAOSLine [CAOSLiteral verb, CAOSRegister r, CAOSConst c] ]
+        doAssign r = doAssignType (constType c) (CAOSRegister r) (CAOSConst c)
 transLine l@(CoreAssign (destStorage, dest, destFuture) (srcStorage, src, srcFuture)) =
     checkAssign destStorage destFuture srcStorage srcFuture
     where
-        verb = "SETV" -- XXX
         checkAssign _ _ _ Nothing = return [] -- rename
         checkAssign (Just (Shared _)) _ _ _ = return [] -- alias
         checkAssign _ Nothing _ _ = return [] -- unused
         checkAssign (Just (Private r)) _ (Just srcStorage) _ = doAssign r srcStorage
 
         checkAssign _ _ _ _ = fail $ "checkAssign: impossible state " ++ show l
+        doAssign r (Private s) =
+            doAssignType (slotType dest) (CAOSRegister r) (CAOSRegister s)
+        doAssign r (Shared s) =
+            doAssignType (slotType dest) (CAOSRegister r) (CAOSRegister s)
+        doAssign r (Const s) =
+            doAssignType (slotType dest) (CAOSRegister r) (CAOSConst s)
 
-        doAssign r (Private s) = do
-            return [ CAOSLine [CAOSLiteral verb, CAOSRegister r, CAOSRegister s] ]
+doAssignType :: CAOSType -> CAOSToken a -> CAOSToken a -> TransM (CAOS a)
+doAssignType t dest src
+    | length clauses == 0
+    = fail "Void type in assignment"
+    | length clauses == 1
+    = let [(_, body)] = clauses
+      in  return [body]
+    | otherwise
+    = do let (hcond, hbody):t = clauses
+         return $ [ CAOSLine ((CAOSLiteral "doif"):hcond), hbody] ++ fmt t ++
+                  [ CAOSLine [CAOSLiteral "endi"] ]
+    where
+        fmt [] = []
+        fmt ((hcond, hbody):t) =
+            [ CAOSLine ((CAOSLiteral "elif"):hcond), hbody ] ++ fmt t
+        allverbs =
+            [(typeNum, ([CAOSLiteral "le", CAOSConst $ CInteger 1], "setv"))
+            ,(typeStr, ([CAOSLiteral "eq", CAOSConst $ CInteger 2], "sets"))
+            ,(typeObj, ([CAOSLiteral "eq", CAOSConst $ CInteger 3], "seta"))]
+        possverbs = filter ((/= typeVoid) . (typeAnd t) . fst) allverbs
+        clauses = map makeclause possverbs
+        makeclause (_, (cond, verb)) =
+            (cond, CAOSLine [CAOSLiteral verb, dest, src])
 
-        doAssign r (Shared s) = do
-            return [ CAOSLine [CAOSLiteral verb, CAOSRegister r, CAOSRegister s] ]
 
-        doAssign r (Const cv) = do
-            return [ CAOSLine [CAOSLiteral verb, CAOSRegister r, CAOSConst cv] ]
