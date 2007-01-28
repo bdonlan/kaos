@@ -7,7 +7,9 @@ data Slot = Slot { slotId :: Int
                  , slotTrace :: Maybe () -- TODO
                  , slotType :: CAOSType
                  }
-    deriving (Show)
+
+instance Show Slot where
+    show (Slot id _ t) = (show id) ++ ":" ++ (show t)
 
 equating f a b  =  f a == f b
 

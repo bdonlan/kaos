@@ -27,6 +27,7 @@ module AST (
             ) where
 
 import Data.List
+import PrettyM
 
 data ConstValue =
     CString  String
@@ -45,7 +46,14 @@ data Expression l =
   | ELexical l
   | EAssign (Expression l) (Expression l)
   | ECall String [Expression l]
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+instance Show l => Show (Expression l) where
+    show (EConst c) = show c
+    show (EBinaryOp s e1 e2) = "o:" ++ s ++ (show (e1, e2))
+    show (ELexical l) = "l:" ++ show l
+    show (EAssign e1 e2) = "assign:" ++ show (e1, e2)
+    show (ECall s e) = "call:" ++ s ++ show e
 
 constInt = EConst . CInteger
 constFloat = EConst . CFloat
@@ -54,7 +62,16 @@ constString = EConst . CString
 data Statement l =
     SExpr  (Expression l)
   | SBlock [Statement l] 
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord)
+
+prettyStatement (SExpr e) = emitLine $ (show e) ++ ";"
+prettyStatement (SBlock b) = do
+    emitLine "{"
+    withIndent 2 $ mapM_ prettyStatement b
+    emitLine "}"
+
+instance Show l => Show (Statement l) where
+    show = runPretty . prettyStatement
 
 data CAOSType = CAOSType { ctNum :: Bool
                          , ctStr :: Bool

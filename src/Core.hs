@@ -14,7 +14,11 @@ data CoreToken t =
     TokenLiteral String
   | TokenSlot    (GenAccess t)
   | TokenConst   ConstValue
-  deriving (Show)
+
+instance Show t => Show (CoreToken t) where
+    show (TokenLiteral l) = "l:" ++ show l
+    show (TokenSlot s) = "s:" ++ show s
+    show (TokenConst c) = "c:" ++ show c
 
 instance Functor CoreToken where
     fmap f (TokenSlot (SA t a)) = TokenSlot (SA (f t) a)
@@ -55,6 +59,9 @@ instance Functor CoreLine where
 
 type CoreBlock t = [CoreLine t]
 type Core t = CoreBlock t
+
+dumpCore :: Show t => Core t -> String
+dumpCore = unlines . map ("* "++) . map show
 
 data GenAccess t = SA t AccessType
     deriving (Show, Ord, Eq)
