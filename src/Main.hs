@@ -27,6 +27,7 @@ import Text.ParserCombinators.Parsec
 import Kaos.Typecheck
 
 import Kaos.AST
+import Kaos.ASTTransforms
 import Kaos.Core
 import Kaos.CAOS
 import Kaos.KaosM
@@ -130,7 +131,8 @@ openSourceFile file = do
 
 coreCompile :: Statement String -> KaosM String
 coreCompile parses =
-    renameLexicals parses   >>=
+    runASTTransforms parses >>=
+    renameLexicals          >>=
     typecheck . astToCore   >>=
     markFuture              >>=
     markStorage             >>=

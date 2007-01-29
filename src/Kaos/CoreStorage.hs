@@ -7,6 +7,7 @@ import Data.List
 import Data.Maybe
 import Data.Generics
 import Control.Monad.State hiding (State)
+import qualified Control.Monad.State as S
 import Kaos.CoreFuture
 import Kaos.VirtRegister
 import Kaos.AST
@@ -90,14 +91,25 @@ markLine (CoreAssign (dest, fdest) (src, fsrc)) = do
     sdest <- getStorage dest
     return $ CoreAssign (sdest, dest, fdest) (ssrc, src, fsrc)
 
-markLine (CoreLine tokens) = do
+markLine l@(CoreLine tokens) = do
+    mapM_ updateStorage $
+        M.toList $ flip execState M.empty $ mapM_ collect tokens
     fmap CoreLine . mapM markToken $ tokens
     where
+        collect :: CoreToken (Slot, Future)
+                -> S.State (M.Map Slot (Future, AccessType)) ()
+        collect (TokenSlot sa@(SA (s, future) access)) = do
+            (_, access') <- gets (fromMaybe (undefined, NoAccess) . M.lookup s)
+            modify $ M.insert s (future, access' `mergeAccess` access)
+        collect _ = return ()
+
+        updateStorage (slot, (future, WriteAccess)) = do
+            newStorage slot future
+            return ()
+        updateStorage _ = return ()
+
         markToken (TokenLiteral l) = return $ TokenLiteral l
         markToken (TokenConst cv ) = return $ TokenConst  cv
-        markToken (TokenSlot sa@(SA (s, future) WriteAccess)) = do
-            storage <- newStorage s future
-            return $ TokenSlot (SA (storage, s, future) WriteAccess)
         markToken (TokenSlot sa@(SA (s, future) acc)) = do
             storage <- getStorage s
             return $ TokenSlot (SA (storage, s, future) acc)

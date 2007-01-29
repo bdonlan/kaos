@@ -3,7 +3,8 @@ module Kaos.Core (Core, CoreBlock, CoreLine(..), lineAccess, CoreToken(..),
              AccessType(..),
              GenAccess(..),
              coreNormalize,
-             dumpCore
+             dumpCore,
+             mergeAccess,
              ) where
 
 import Kaos.Slot

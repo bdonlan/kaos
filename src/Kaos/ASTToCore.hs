@@ -29,11 +29,11 @@ evalCond = everywhereM (mkM eval)
             return $ BCompare cmp (ELexical s1) (ELexical s2)
         eval x = return x
 
-condToCore (BAnd e1 e2) = (cmpToCore e1) ++ [TokenLiteral "&&"] ++ condToCore e2
-condToCore (BOr  e1 e2) = (cmpToCore e1) ++ [TokenLiteral "||"] ++ condToCore e2
+condToCore (BAnd e1 e2) = (condToCore e1) ++ [TokenLiteral "&&"] ++ cmpToCore e2
+condToCore (BOr  e1 e2) = (condToCore e1) ++ [TokenLiteral "||"] ++ cmpToCore e2
 condToCore e = cmpToCore e
 
-cmpToCore (BCompare cmp (ELexical e1) (ELexical e2)) =
+cmpToCore c@(BCompare cmp (ELexical e1) (ELexical e2)) = 
     [TokenSlot (SA e1 ReadAccess)
     ,TokenLiteral $ comparisonToCAOS cmp
     ,TokenSlot (SA e2 ReadAccess)
@@ -92,7 +92,7 @@ expToCore (ECall "__touch" [e]) = do
     emit $ CoreTouch (SA s MutateAccess)
     return s
 
-expToCore (EBoolCast c) = do
+expToCore e@(EBoolCast c) = do
     c' <- evalCond c
     let cexp = condToCore c'
     s  <- newSlot
