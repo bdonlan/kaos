@@ -6,6 +6,7 @@ import Kaos.Slot
 import Kaos.KaosM
 import Control.Monad.Writer
 import Kaos.Typecheck
+import Data.Generics
 
 astToCore :: MonadKaos m => Statement Slot -> TypeCheckT m (Core Slot)
 astToCore (SExpr e) = do
@@ -16,6 +17,28 @@ astToCore (SBlock st) = fmap concat $ mapM astToCore st
 emit x = tell [x]
 
 type CoreWriter m a = WriterT (CoreBlock Slot) (TypeCheckT m) a
+
+evalCond :: MonadKaos m => BoolExpr Slot -> CoreWriter m (BoolExpr Slot)
+evalCond = everywhereM (mkM eval)
+    where
+        eval :: MonadKaos m => BoolExpr Slot -> CoreWriter m (BoolExpr Slot)
+        eval (BCompare cmp e1 e2) = do
+            s1 <- expToCore e1
+            s2 <- expToCore e2
+            s1 `sameType` s2
+            return $ BCompare cmp (ELexical s1) (ELexical s2)
+        eval x = return x
+
+condToCore (BAnd e1 e2) = (cmpToCore e1) ++ [TokenLiteral "&&"] ++ condToCore e2
+condToCore (BOr  e1 e2) = (cmpToCore e1) ++ [TokenLiteral "||"] ++ condToCore e2
+condToCore e = cmpToCore e
+
+cmpToCore (BCompare cmp (ELexical e1) (ELexical e2)) =
+    [TokenSlot (SA e1 ReadAccess)
+    ,TokenLiteral $ comparisonToCAOS cmp
+    ,TokenSlot (SA e2 ReadAccess)
+    ]
+cmpToCore e = error $ "unexpected non-normal form: " ++ show e
 
 expToCore :: MonadKaos m => Expression Slot -> CoreWriter m Slot
 expToCore (EConst c) = do
@@ -68,5 +91,20 @@ expToCore (ECall "__touch" [e]) = do
     s <- expToCore e
     emit $ CoreTouch (SA s MutateAccess)
     return s
+
+expToCore (EBoolCast c) = do
+    c' <- evalCond c
+    let cexp = condToCore c'
+    s  <- newSlot
+    s `typeIs` typeNum
+
+    emit $ CoreLine $
+        [ TokenLiteral "doif" ] ++ cexp ++
+        [ TokenLiteral "setv", TokenSlot (SA s WriteAccess), TokenConst (CInteger 1) ] ++
+        [ TokenLiteral "else" ] ++
+        [ TokenLiteral "setv", TokenSlot (SA s WriteAccess), TokenConst (CInteger 0) ] ++
+        [ TokenLiteral "endi" ]
+    return s
+
 expToCore e = error $ "ICE: can't expToCore: " ++ show e
 

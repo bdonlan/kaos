@@ -23,22 +23,42 @@ module Kaos.AST (
             constInt, constFloat, constString,
             CAOSType, typeAnd, typeOr,
             typeAny, typeNum, typeStr, typeObj, typeVoid,
-            constType,
+            constType, comparisonToCAOS, BoolExpr(..),
+            Comparison(..),
             ) where
 
 import Data.List
+import Data.Generics
 import Kaos.PrettyM
 
 data ConstValue =
     CString  String
   | CInteger Int
   | CFloat   Double
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Data, Typeable)
 
 instance Show ConstValue where
     show (CString s) = "#<s" ++ s ++ ">"
     show (CInteger i) = "#<i" ++ (show i) ++ ">"
     show (CFloat f) = "#<f" ++ (show f) ++ ">"
+
+data Comparison = CLT | CEQ | CLE | CGT | CGE | CNE
+    deriving (Eq, Ord, Show, Data, Typeable)
+
+comparisonToCAOS CLT = "lt"
+comparisonToCAOS CEQ = "eq"
+comparisonToCAOS CLE = "le"
+comparisonToCAOS CGT = "gt"
+comparisonToCAOS CGE = "ge"
+comparisonToCAOS CNE = "ne"
+
+data BoolExpr l =
+    BAnd  (BoolExpr l) (BoolExpr l)
+  | BOr   (BoolExpr l) (BoolExpr l)
+  | BNot  (BoolExpr l)              -- non-normal form
+  | BExpr (Expression l)            -- non-normal form
+  | BCompare Comparison (Expression l) (Expression l)
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 data Expression l =
     EConst ConstValue
@@ -46,7 +66,8 @@ data Expression l =
   | ELexical l
   | EAssign (Expression l) (Expression l)
   | ECall String [Expression l]
-  deriving (Eq, Ord)
+  | EBoolCast (BoolExpr l)
+  deriving (Eq, Ord, Data, Typeable)
 
 instance Show l => Show (Expression l) where
     show (EConst c) = show c
@@ -54,6 +75,7 @@ instance Show l => Show (Expression l) where
     show (ELexical l) = "l:" ++ show l
     show (EAssign e1 e2) = "assign:" ++ show (e1, e2)
     show (ECall s e) = "call:" ++ s ++ show e
+    show (EBoolCast c) = "bcast:" ++ (show c)
 
 constInt = EConst . CInteger
 constFloat = EConst . CFloat
@@ -62,7 +84,8 @@ constString = EConst . CString
 data Statement l =
     SExpr  (Expression l)
   | SBlock [Statement l] 
-    deriving (Eq, Ord)
+  | SCond (BoolExpr l) (Statement l) (Statement l)
+    deriving (Eq, Ord, Data, Typeable)
 
 prettyStatement (SExpr e) = emitLine $ (show e) ++ ";"
 prettyStatement (SBlock b) = do
@@ -77,7 +100,7 @@ data CAOSType = CAOSType { ctNum :: Bool
                          , ctStr :: Bool
                          , ctObj :: Bool
                          }
-                         deriving (Eq, Ord)
+                         deriving (Eq, Ord, Data, Typeable)
 
 instance Show CAOSType where
     show t = "<type:" ++ ts ++ ">"

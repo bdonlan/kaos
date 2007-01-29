@@ -74,9 +74,12 @@ lexer  = P.makeTokenParser
 expr    = buildExpressionParser table factor
         <?> "expression"
 
-table   = [
-           [op "*" "mulv" AssocLeft, op "/" "divv" AssocLeft]
+table   = [[Prefix (do { reservedOp "!"; return $ EBoolCast . BNot . BExpr})]
+          ,[op "*" "mulv" AssocLeft, op "/" "divv" AssocLeft]
           ,[op "+" "addv" AssocLeft, op "-" "subv" AssocLeft]
+          ,map mkCompar comparOps
+          ,[Infix (do { reservedOp "&&"; return $ \a b -> EBoolCast (BAnd (BExpr a) (BExpr b))}) AssocLeft
+           ,Infix (do { reservedOp "||"; return $ \a b -> EBoolCast (BOr  (BExpr a) (BExpr b))}) AssocLeft]
           ,[aop "*=" "mulv" AssocRight, aop "/=" "divv" AssocRight,
             aop "-=" "subv" AssocRight, aop "+=" "addv" AssocRight]
           ,[eqop]
@@ -88,6 +91,14 @@ table   = [
              = Infix (do{ reservedOp s; return $ \var exp -> EAssign var (EBinaryOp f var exp) } <?> "operator") assoc
           eqop
              = Infix (do{ reservedOp "="; return $ EAssign } <?> "operator") AssocRight
+          mkCompar (cstr, ctype) = Infix matcher AssocNone
+            where matcher = do
+                    reservedOp cstr
+                    return $ \a b -> EBoolCast $ BCompare ctype a b
+          comparOps = [ ("<" , CLT), (">" , CGT)
+                      , ("<=", CLE), (">=", CGE)
+                      , ("==", CEQ), ("!=", CNE), ("/=", CNE)
+                      ]
 
 integerV = fmap (constInt . fromIntegral) $ negWrap natural
 
@@ -124,11 +135,21 @@ stringLit = do
 
 lexical = liftM ELexical identifier
 
-statement = (do {
+exprstmt = (do {
             e <- expr;
             symbol ";";
             return $ SExpr e
             })
+
+ifstmt = do
+    reserved "if"
+    cond <- parens $ fmap BExpr expr
+    block1 <- fmap SBlock $ braces $ many statement
+    block2 <- fmap SBlock $ [] `option` (braces $ many statement)
+    return $ SCond cond block1 block2
+
+statement = exprstmt
+        <|> ifstmt
         <?> "statement"
 root = simpleScript
 

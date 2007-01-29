@@ -3,9 +3,10 @@ module Kaos.VirtRegister (VirtRegister(..), VRegAllocT, runVRegAllocT, newVReg) 
 import Kaos.SeqT
 import Control.Monad.Trans
 import Control.Monad.State
+import Data.Generics
 
 newtype VirtRegister = VR Int
-    deriving (Show, Read, Eq, Ord, Enum)
+    deriving (Show, Read, Eq, Ord, Enum, Data, Typeable)
 
 newtype VRegAllocT m a = RT (SeqT VirtRegister m a)
     deriving (Monad, MonadTrans)

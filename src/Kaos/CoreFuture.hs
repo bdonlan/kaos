@@ -5,6 +5,7 @@ import Kaos.Slot
 import Kaos.KaosM
 import Data.List
 import Data.Maybe
+import Data.Generics
 import Control.Monad.State hiding (State)
 import Kaos.VirtRegister
 
@@ -13,7 +14,7 @@ import qualified Data.Map as M
 data Lookahead = Bound VirtRegister
                | Read
                | Mutate
-               deriving (Show, Eq)
+               deriving (Show, Eq, Data, Typeable)
 type FutureS = M.Map Slot Lookahead
 type Future  = Maybe Lookahead
 

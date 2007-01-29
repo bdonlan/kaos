@@ -8,6 +8,7 @@ module Kaos.Core (Core, CoreBlock, CoreLine(..), lineAccess, CoreToken(..),
 
 import Kaos.Slot
 import Kaos.AST
+import Data.Generics
 import qualified Data.Map as M
 
 type Note = ()
@@ -16,6 +17,7 @@ data CoreToken t =
     TokenLiteral String
   | TokenSlot    (GenAccess t)
   | TokenConst   ConstValue
+  deriving (Data, Typeable)
 
 instance Show t => Show (CoreToken t) where
     show (TokenLiteral l) = "l:" ++ show l
@@ -55,7 +57,7 @@ data CoreLine t =
                    , ctsObj  :: CoreLine t
                    }
   -- TODO: CoreCondition, CoreLoop etc
-  deriving (Show)
+  deriving (Show, Data, Typeable)
 
 instance Functor CoreLine where
     fmap f (CoreLine l) = CoreLine $ map (fmap f) l
@@ -84,10 +86,10 @@ dumpCore :: Show t => Core t -> String
 dumpCore = unlines . map ("* "++) . map show
 
 data GenAccess t = SA t AccessType
-    deriving (Show, Ord, Eq)
+    deriving (Show, Ord, Eq, Data, Typeable)
 
 data AccessType = NoAccess | ReadAccess | WriteAccess | MutateAccess
-    deriving (Show, Ord, Eq)
+    deriving (Show, Ord, Eq, Data, Typeable)
 
 mergeAccess x y | x == y = x
 mergeAccess NoAccess x = x

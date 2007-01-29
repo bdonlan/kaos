@@ -5,6 +5,7 @@ import Kaos.Slot
 import Kaos.KaosM
 import Data.List
 import Data.Maybe
+import Data.Generics
 import Control.Monad.State hiding (State)
 import Kaos.CoreFuture
 import Kaos.VirtRegister
@@ -16,7 +17,7 @@ data Storage    = Private VirtRegister
                 | Shared  VirtRegister
                 | Const   ConstValue
                 | Phantom
-                deriving (Show, Eq)
+                deriving (Show, Eq, Data, Typeable)
 
 type SlotStorage = Maybe Storage
 
