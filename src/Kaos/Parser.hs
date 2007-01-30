@@ -145,7 +145,8 @@ ifstmt = do
     reserved "if"
     cond <- parens $ fmap BExpr expr
     block1 <- fmap SBlock $ braces $ many statement
-    block2 <- fmap SBlock $ [] `option` (braces $ many statement)
+    block2 <- fmap SBlock $ [] `option`
+                            (reserved "else" >> (braces $ many statement))
     return $ SCond cond block1 block2
 
 statement = exprstmt
