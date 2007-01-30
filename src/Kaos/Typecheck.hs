@@ -83,9 +83,21 @@ translateSlot state slot = evalState m state
             t <- getSlotType slot
             return $ slot { slotType = t }
 
+simplify :: CoreLine () -> CoreLine ()
+simplify (CoreTypeSwitch slot num str obj)
+    | slotType slot == typeNum
+    = num
+    | slotType slot == typeStr
+    = str
+    | slotType slot == typeObj
+    = obj
+simplify c = c
+
 typecheck :: (MonadKaos m) => (TypeCheckT m (Core ())) -> m (Core ())
 typecheck (TCT m) = flip evalStateT initSt $ do
     core <- m
     s <- get
-    return . coreNormalize $ everywhere (mkT $ translateSlot s) core
+    let translated = everywhere (mkT $ translateSlot s) core
+    let simplified = everywhere (mkT simplify) translated
+    return simplified
 
