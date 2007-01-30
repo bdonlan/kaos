@@ -11,6 +11,8 @@ import Kaos.Slot
 import Kaos.AST
 import Data.Generics
 import qualified Data.Map as M
+import Kaos.PrettyM
+import Data.Char
 
 type Note = ()
 
@@ -20,10 +22,15 @@ data CoreToken t =
   | TokenConst   ConstValue
   deriving (Data, Typeable)
 
+shortAccess NoAccess = ""
+shortAccess ReadAccess = "r"
+shortAccess WriteAccess = "w"
+shortAccess MutateAccess = "rw"
+
 instance Show t => Show (CoreToken t) where
-    show (TokenLiteral l) = "l:" ++ show l
-    show (TokenSlot s) = "s:" ++ show s
-    show (TokenConst c) = "c:" ++ show c
+    show (TokenLiteral l) = map toUpper $ show l
+    show (TokenSlot (SA s ac)) = "$" ++ (show s) ++ "(" ++ (shortAccess ac) ++ ")"
+    show (TokenConst c) = "#" ++ show c
 
 instance Functor CoreToken where
     fmap f (TokenSlot (SA t a)) = TokenSlot (SA (f t) a)
@@ -86,6 +93,34 @@ data CoreLine t =
   -- TODO: CoreCondition, CoreLoop etc
   deriving (Show, Data, Typeable)
 
+showLine :: Show t => CoreLine t -> PrettyM ()
+showLine (CoreLine l) =
+    emitLine $ "NORMAL " ++ unwords (map show l)
+showLine (CoreAssign dest src) =
+    emitLine $ "ASSIGN " ++ unwords (map show [dest, src])
+showLine (CoreConst t cv) =
+    emitLine $ "CONST= " ++ (show t) ++ " " ++ (show cv)
+showLine (CoreNote n) =
+    emitLine $ "NOTE " ++ show n
+showLine (CoreTouch t) =
+    emitLine $ "TOUCH " ++ show t
+showLine (CoreCond cond ifb elsb) = prefixFirst "IF " $ do
+    emitLine $ unwords (map show cond)
+    emitLine "{ "
+    withIndent 2 $ showBlock ifb
+    emitLine "} else {"
+    withIndent 2 $ showBlock elsb
+    emitLine "}"
+showLine (CoreTypeSwitch slot num str obj) = prefixFirst "CTS " $ do
+    emitLine $ "CONTROL: " ++ show slot
+    prefixFirst "NUM: " $ showLine num
+    prefixFirst "STR: " $ showLine str
+    prefixFirst "OBJ: " $ showLine obj
+showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show x)
+
+showBlock :: Show t => Core t -> PrettyM ()
+showBlock = mapM_ showLine
+
 instance Functor CoreLine where
     fmap f (CoreLine l) = CoreLine $ map (fmap f) l
     fmap f (CoreAssign dest src) = CoreAssign (f dest) (f src)
@@ -112,7 +147,7 @@ type CoreBlock t = [CoreLine t]
 type Core t = CoreBlock t
 
 dumpCore :: Show t => Core t -> String
-dumpCore = unlines . map ("* "++) . map show
+dumpCore = runPretty . showBlock
 
 data GenAccess t = SA t AccessType
     deriving (Show, Ord, Eq, Data, Typeable)

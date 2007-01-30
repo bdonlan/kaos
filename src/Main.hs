@@ -49,7 +49,8 @@ data Settings = Settings {
     helpOnly :: Bool,
     versionOnly :: Bool,
     sourceFiles :: [String],
-    outputFile :: String
+    outputFile :: String,
+    debugFlags :: [String]
     }
 
 instance Show Settings where
@@ -65,7 +66,8 @@ defaults = Settings {
     helpOnly = False,
     versionOnly = False,
     sourceFiles = [],
-    outputFile = ""
+    outputFile = "",
+    debugFlags = []
     }
 
 parseArgs s ("--help":_) = return $ s { helpOnly = True }
@@ -97,6 +99,13 @@ parseShortArgs s ('o':[]) (file:remain) =
         parseArgs s remain
 
 parseShortArgs s ('o':[]) [] = fail "-o requires an argument"
+
+parseShortArgs s ('d':flag@(_:_)) remain =
+    parseArgs (s { debugFlags = flag:(debugFlags s) }) remain
+
+parseShortArgs s ('d':[]) (flag:remain) =
+    parseArgs (s { debugFlags = flag:(debugFlags s) }) remain
+
 parseShortArgs s (x:_) _ = fail $ "Unknown short argument -" ++ [x]
 
 versionStr = "HaKaos v0.0"
@@ -129,28 +138,33 @@ openSourceFile file = do
     h <- openFile file ReadMode
     return (file, h)
 
-dumpPass :: Show t => t -> KaosM t
-dumpPass d = debugKM (show d) >> return d
+dumpFlagged :: String -> (t -> String) -> t -> KaosM t
+dumpFlagged flag f v = do
+    debugDump flag (f v)
+    return v
 
 coreCompile :: Statement String -> KaosM String
 coreCompile parses =
-    runASTTransforms parses >>=
-    renameLexicals          >>=
-    typecheck . astToCore   >>=
-    markFuture              >>=
-    markStorage             >>=
-    coreToVirt              >>=
-    regAlloc                >>=
+    runASTTransforms parses     >>=
+    renameLexicals              >>=
+    typecheck . astToCore       >>=
+    dumpFlagged "dump-final-core" dumpCore >>=
+    markFuture                  >>=
+    markStorage                 >>=
+    dumpFlagged "dump-marked-core" dumpCore >>=
+    coreToVirt                  >>=
+    regAlloc                    >>=
     return . emitCaos
 
-runCompile = runKaosM . coreCompile
+runCompile :: [String] -> Statement String -> IO String
+runCompile flags = runKaosM flags . coreCompile
 
 doCompile s = do
     when ((length $ sourceFiles s) == 0) $ fail "No source files"
     sourceHandles <- mapM openSourceFile $ sourceFiles s
     parses <- mapM parseFile sourceHandles
     let merged = head parses
-    putStrLn =<< runCompile merged
+    putStrLn =<< runCompile (debugFlags s) merged
 
 parseFile (name, handle) = do
     contents <- hGetContents handle
