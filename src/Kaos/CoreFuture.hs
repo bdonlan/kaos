@@ -1,4 +1,4 @@
-module Kaos.CoreFuture (markFuture, markBlockFuture, Lookahead(..), Future) where
+module Kaos.CoreFuture (markFuture, markBlockFuture, Lookahead(..), FutureS, Future) where
 
 import Kaos.Core
 import Kaos.Slot
@@ -23,36 +23,36 @@ type FutureM a = StateT FutureS KaosM a
 
 getFuture = gets . M.lookup
 
-markFuture :: Core Slot -> KaosM (Core (Slot, Future))
-markFuture = flip evalStateT M.empty . markBlock
+markFuture :: Core a -> KaosM (Core FutureS)
+markFuture = markBlockFuture M.empty
 
-markBlockFuture = markBlock
+markBlockFuture :: FutureS -> Core a -> KaosM (Core FutureS)
+markBlockFuture assumedFuture =
+    flip evalStateT assumedFuture . markBlock . fmap (const ())
 
-markBlock :: Core Slot -> FutureM (Core (Slot, Future))
-markBlock = fmap reverse . mapM markLine . reverse
+markBlock :: Core () -> FutureM (Core FutureS)
+markBlock (CB l) = do
+    lines <- mapM markLine_ (reverse l)
+    return $ CB (reverse lines)
+    where
+        markLine_ :: (CoreLine (), ()) -> FutureM (CoreLine FutureS, FutureS)
+        markLine_ (line, _) = do
+            future <- get
+            markLine line
+            return (fmap (const $ err line) line, future)
+        err line = error $ "Tried to use the future of a nested line: " ++ show line
 
-markLine :: CoreLine Slot -> FutureM (CoreLine (Slot, Future))
+markLine :: CoreLine () -> FutureM ()
 markLine (CoreTypeSwitch _ _ _ _) = fail "late CoreTypeSwitch (TODO: extra translate stage)"
-markLine (CoreNote t) = return $ CoreNote t
+markLine (CoreNote t) = return ()
 markLine (CoreTouch sa@(SA t acc)) = do
-    f <- getFuture t
     markLine $ CoreLine [ TokenSlot sa ]
-    return $ CoreTouch (SA (t, f) acc)
-markLine (CoreConst dest cv) = do
-    f <- getFuture dest
+markLine (CoreConst dest cv) =
     modify $ M.delete dest
-    return $ CoreConst (dest, f) cv
 markLine line@(CoreLine tokens) = do
     let mergeAcc = lineAccess line
-    tok' <- mapM markToken tokens
     mapM_ update mergeAcc
-    return $ CoreLine tok'
     where
-        markToken (TokenConst c)       = return $ TokenConst c
-        markToken (TokenLiteral s)     = return $ TokenLiteral s
-        markToken (TokenSlot (SA s a)) = do
-            future <- gets (M.lookup s)
-            return $ TokenSlot (SA (s, future) a)
         update :: (Slot, AccessType) -> FutureM ()
         update (s, WriteAccess)  = modify $ M.delete s
         update (s, ReadAccess)   = modify $ flip M.alter s (`mplus` Just Read)
@@ -64,18 +64,9 @@ markLine line@(CoreLine tokens) = do
 
 markLine line@(CoreCond cond _ _) = do
     let mergeAcc = lineAccess line
-    let line' = fmap (\s -> (s, error $ "marked CoreCond must be further resolved!" ++ show line)) line
-    let (CoreCond _ ontrue' onfalse') = line'
-    cond' <- mapM markToken cond
     mapM_ update mergeAcc
-    return $ CoreCond cond' ontrue' onfalse'
     where
         -- XXX this is a copy of CoreLine above, find a way to merge the two
-        markToken (TokenConst c)       = return $ TokenConst c
-        markToken (TokenLiteral s)     = return $ TokenLiteral s
-        markToken (TokenSlot (SA s a)) = do
-            future <- gets (M.lookup s)
-            return $ TokenSlot (SA (s, future) a)
         update :: (Slot, AccessType) -> FutureM ()
         update (s, WriteAccess)  = modify $ M.delete s
         update (s, ReadAccess)   = modify $ flip M.alter s (`mplus` Just Read)
@@ -95,4 +86,3 @@ markLine (CoreAssign dest src) = do
         (Nothing, _) -> do -- rename
             modify $ M.alter (const fdest) src
         (_, _) -> return () -- overwrite; we don't set future as it's already non-Nothing
-    return $ CoreAssign (dest, fdest) (src, fsrc)

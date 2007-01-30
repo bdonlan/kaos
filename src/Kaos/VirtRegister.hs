@@ -4,12 +4,13 @@ import Kaos.SeqT
 import Control.Monad.Trans
 import Control.Monad.State
 import Data.Generics
+import Kaos.KaosM
 
 newtype VirtRegister = VR Int
     deriving (Show, Read, Eq, Ord, Enum, Data, Typeable)
 
 newtype VRegAllocT m a = RT (SeqT VirtRegister m a)
-    deriving (Monad, MonadTrans)
+    deriving (Monad, MonadTrans, MonadKaos)
 
 instance (MonadState s m) => MonadState s (VRegAllocT m) where
     get = lift get

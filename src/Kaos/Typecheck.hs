@@ -10,10 +10,9 @@ import Kaos.Core
 import Kaos.AST
 import Kaos.Slot
 import Data.Maybe
+import Data.Generics
 
 import qualified Data.Map as M
-
-type Annotation m = TCT m ()
 
 newtype TypeCheckT m a = TCT (TCT m a)
     deriving (Monad, MonadKaos, Functor)
@@ -84,9 +83,9 @@ translateSlot state slot = evalState m state
             t <- getSlotType slot
             return $ slot { slotType = t }
 
-typecheck :: (MonadKaos m) => (TypeCheckT m (Core Slot)) -> m (Core Slot)
+typecheck :: (MonadKaos m) => (TypeCheckT m (Core ())) -> m (Core ())
 typecheck (TCT m) = flip evalStateT initSt $ do
     core <- m
     s <- get
-    return . coreNormalize $ fmap (fmap $ translateSlot s) core
+    return . coreNormalize $ everywhere (mkT $ translateSlot s) core
 

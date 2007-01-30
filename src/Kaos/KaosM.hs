@@ -23,6 +23,9 @@ instance (MonadKaos m) => MonadKaos (ReaderT a m) where
 instance (Monoid w, MonadKaos m) => MonadKaos (WriterT w m) where
     liftK = lift . liftK
 
+instance (MonadKaos m) => MonadKaos (SeqT i m) where
+    liftK = lift . liftK
+
 instance MonadKaos KaosM where
     liftK = id
 

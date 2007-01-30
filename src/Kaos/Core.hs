@@ -1,4 +1,4 @@
-module Kaos.Core (Core, CoreBlock, CoreLine(..), lineAccess, CoreToken(..),
+module Kaos.Core (Core(..), CoreBlock(..), CoreLine(..), lineAccess, CoreToken(..),
              Note(..),
              AccessType(..),
              GenAccess(..),
@@ -13,12 +13,13 @@ import Data.Generics
 import qualified Data.Map as M
 import Kaos.PrettyM
 import Data.Char
+import Control.Arrow
 
 type Note = ()
 
-data CoreToken t =
+data CoreToken =
     TokenLiteral String
-  | TokenSlot    (GenAccess t)
+  | TokenSlot    (GenAccess Slot)
   | TokenConst   ConstValue
   deriving (Data, Typeable)
 
@@ -27,18 +28,12 @@ shortAccess ReadAccess = "r"
 shortAccess WriteAccess = "w"
 shortAccess MutateAccess = "rw"
 
-instance Show t => Show (CoreToken t) where
+instance Show CoreToken where
     show (TokenLiteral l) = map toUpper $ show l
     show (TokenSlot (SA s ac)) = "$" ++ (show s) ++ "(" ++ (shortAccess ac) ++ ")"
     show (TokenConst c) = "#" ++ show c
 
-instance Functor CoreToken where
-    fmap f (TokenSlot (SA t a)) = TokenSlot (SA (f t) a)
-    fmap _ (TokenLiteral s)     = TokenLiteral s
-    fmap _ (TokenConst c)       = TokenConst c
-
-
-lineAccess :: (Ord t, Eq t) => CoreLine t -> [(t, AccessType)]
+lineAccess :: CoreLine t -> [(Slot, AccessType)]
 lineAccess l
     = M.toList $ foldl addAccess M.empty (lineAccess' l)
     where
@@ -47,7 +42,7 @@ lineAccess l
             updateKey Nothing = Just ac
             updateKey (Just a') = Just $ a' `mergeAccess` ac
 
-lineAccess' :: (Ord t, Eq t) => CoreLine t -> [GenAccess t]
+lineAccess' :: CoreLine f -> [GenAccess Slot]
 lineAccess' (CoreLine tokens) = concatMap findAccess tokens
     where
         findAccess (TokenSlot s) = [s]
@@ -64,7 +59,7 @@ lineAccess' (CoreCond condition ifTrue ifFalse)
                         $ M.unionWith (\(a, _) (b, _) -> (a, b))
                           (buildMap ifTrue)
                           (buildMap ifFalse)
-        buildMap :: Ord a => CoreBlock a -> M.Map a (AccessType, AccessType)
+        buildMap :: CoreBlock a -> M.Map Slot (AccessType, AccessType)
         buildMap l = M.map (\a -> (a, NoAccess)) $ blockAccess l
         finishMerge slot (br1, br2) = SA slot (br1 `comb` br2)
         comb x y | x == y         = x
@@ -76,24 +71,36 @@ lineAccess' (CoreCond condition ifTrue ifFalse)
         comb x y                  = comb y x
 lineAccess' _ = []
 
-blockAccess b = M.unionsWith mergeAccess $ map (M.fromList . lineAccess) b
+blockAccess (CB b) =
+    M.unionsWith mergeAccess $ map (M.fromList . lineAccess . fst) b
 
 data CoreLine t =
-    CoreLine [CoreToken t]
-  | CoreAssign t t -- dest src
-  | CoreConst  t ConstValue
+    CoreLine [CoreToken]
+  | CoreAssign Slot Slot -- dest src
+  | CoreConst  Slot ConstValue
   | CoreNote   Note
-  | CoreTouch  (GenAccess t)
-  | CoreCond   [CoreToken t] (CoreBlock t) (CoreBlock t)
-  | CoreTypeSwitch { ctsSlot :: t
-                   , ctsNum  :: CoreLine t
+  | CoreTouch  (GenAccess Slot)
+  | CoreCond   [CoreToken] (CoreBlock t) (CoreBlock t)
+  | CoreTypeSwitch { ctsSlot :: Slot
+                   , ctsNum  :: CoreLine t 
                    , ctsStr  :: CoreLine t
                    , ctsObj  :: CoreLine t
                    }
   -- TODO: CoreCondition, CoreLoop etc
   deriving (Show, Data, Typeable)
 
-showLine :: Show t => CoreLine t -> PrettyM ()
+instance Functor CoreLine where
+    fmap f (CoreLine l) = CoreLine l
+    fmap f (CoreAssign s1 s2) = CoreAssign s1 s2
+    fmap f (CoreConst s cv) = CoreConst s cv
+    fmap f (CoreNote n) = CoreNote n
+    fmap f (CoreTouch s) = CoreTouch s
+    fmap f (CoreCond cond if_ else_) =
+        CoreCond cond (fmap f if_) (fmap f else_)
+    fmap f (CoreTypeSwitch slot n s o) =
+        CoreTypeSwitch slot (fmap f n) (fmap f s) (fmap f o)
+
+showLine :: CoreLine f -> PrettyM ()
 showLine (CoreLine l) =
     emitLine $ "NORMAL " ++ unwords (map show l)
 showLine (CoreAssign dest src) =
@@ -116,20 +123,10 @@ showLine (CoreTypeSwitch slot num str obj) = prefixFirst "CTS " $ do
     prefixFirst "NUM: " $ showLine num
     prefixFirst "STR: " $ showLine str
     prefixFirst "OBJ: " $ showLine obj
-showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show x)
+showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show $ fmap (const ()) x)
 
-showBlock :: Show t => Core t -> PrettyM ()
-showBlock = mapM_ showLine
-
-instance Functor CoreLine where
-    fmap f (CoreLine l) = CoreLine $ map (fmap f) l
-    fmap f (CoreAssign dest src) = CoreAssign (f dest) (f src)
-    fmap f (CoreConst dest cv) = CoreConst (f dest) cv
-    fmap f (CoreTouch (SA s a)) = CoreTouch (SA (f s) a)
-    fmap f (CoreTypeSwitch s cn cs co) = CoreTypeSwitch (f s) (fmap f cn) (fmap f cs) (fmap f co)
-    fmap _ (CoreNote n) = CoreNote n
-    fmap f (CoreCond cond ontrue onfalse)
-        = CoreCond (map (fmap f) cond) (map (fmap f) ontrue) (map (fmap f) onfalse)
+showBlock :: CoreBlock f -> PrettyM ()
+showBlock (CB l) = mapM_ (showLine . fst) l
 
 lineNormalize (CoreTypeSwitch s cn cs co)
     | slotType s == typeNum
@@ -140,12 +137,16 @@ lineNormalize (CoreTypeSwitch s cn cs co)
     = lineNormalize co
 lineNormalize l = l
 
-coreNormalize :: Core Slot -> Core Slot
-coreNormalize = map lineNormalize
+coreNormalize :: Core t -> Core t
+coreNormalize (CB l) = CB $ map (first lineNormalize) l
 
-type CoreBlock t = [CoreLine t]
+newtype CoreBlock t = CB [(CoreLine t, t)]
+    deriving (Show, Eq, Ord, Read, Data, Typeable)
 type Core t = CoreBlock t
 
+instance Functor CoreBlock where
+    fmap f (CB l) = CB $ map (\(cl, t) -> (fmap f cl, f t)) l
+    
 dumpCore :: Show t => Core t -> String
 dumpCore = runPretty . showBlock
 

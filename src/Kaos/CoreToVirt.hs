@@ -14,16 +14,25 @@ import Data.List
 import Data.Maybe
 import Debug.Trace
 import Control.Monad.State hiding (State)
+import Control.Monad.Reader
 
 import qualified Data.Map as M
 
-coreToVirt :: Core (SlotStorage, Slot, Future) -> KaosM (CAOS VirtRegister)
-coreToVirt = transBlock
+type TransM a = ReaderT (StorageS, FutureS) KaosM a
 
-transBlock :: MarkedBlock -> KaosM (CAOSBlock VirtRegister)
-transBlock = fmap concat . mapM transLine
+getStorage slot = asks (M.lookup slot . fst)
+getFuture  slot = asks (M.lookup slot . snd)
 
-transLine :: MarkedLine -> KaosM [CAOSLine VirtRegister]
+coreToVirt :: Core (StorageS, FutureS) -> KaosM (CAOS VirtRegister)
+coreToVirt b = runReaderT (transBlock b) undefined
+
+transBlock :: CoreBlock (StorageS, FutureS) -> TransM (CAOSBlock VirtRegister)
+transBlock (CB l) = fmap concat $ mapM transLine_ l
+    where
+        transLine_ :: (CoreLine (StorageS, FutureS), (StorageS, FutureS)) -> TransM [CAOSLine VirtRegister]
+        transLine_ (line, env) = local (const env) (transLine line)
+
+transLine :: CoreLine (StorageS, FutureS) -> TransM [CAOSLine VirtRegister]
 transLine (CoreNote n) = return []
 transLine (CoreTouch _) = return []
 transLine line@(CoreLine l) = do
@@ -32,19 +41,23 @@ transLine line@(CoreLine l) = do
     where
         transToken (TokenLiteral l) = return $ CAOSLiteral l
         transToken (TokenConst c) = return $ CAOSConst c
-        transToken (TokenSlot (SA (storage, _, _) _)) = transStorage storage
+        transToken (TokenSlot (SA slot _)) = getStorage slot >>= transStorage
         transStorage (Just (Private r)) = return $ CAOSRegister r
         transStorage (Just (Shared r)) = return $ CAOSRegister r
         transStorage (Just (Const c)) = return $ CAOSConst c
         transStorage x = fail $ "transLine: register storage in bad state: " ++ show line
-transLine (CoreConst s@(storage, _, _) c) = checkAssign storage
+transLine (CoreConst slot c) = getStorage slot >>= checkAssign
     where
         checkAssign (Just (Private r)) = doAssign r
         checkAssign (Just (Const _))   = return []
         checkAssign Nothing            = return []
         checkAssign x                  = fail $ "doConstAssign: unexpected storage " ++ show x
         doAssign r = doAssignType (constType c) (CAOSRegister r) (CAOSConst c)
-transLine l@(CoreAssign (destStorage, dest, destFuture) (srcStorage, src, srcFuture)) =
+transLine l@(CoreAssign dest src) = do
+    destStorage <- getStorage dest
+    destFuture  <- getFuture  dest
+    srcStorage  <- getStorage src
+    srcFuture   <- getFuture  src
     checkAssign destStorage destFuture srcStorage srcFuture
     where
         checkAssign _ _ _ Nothing = return [] -- rename
@@ -61,8 +74,8 @@ transLine l@(CoreAssign (destStorage, dest, destFuture) (srcStorage, src, srcFut
             doAssignType (slotType dest) (CAOSRegister r) (CAOSConst s)
 
 transLine l@(CoreCond cond iftrue iffalse) = do
-    cond' <- (transLine (CoreLine $ (TokenLiteral "doif"):cond) :: KaosM (CAOS VirtRegister))
-    iftrue' <- (transBlock iftrue :: KaosM (CAOS VirtRegister))
+    cond' <- transLine (CoreLine $ (TokenLiteral "doif"):cond)
+    iftrue' <- transBlock iftrue
     iffalse' <- transBlock iffalse
     return $ cond'
           ++ iftrue'
@@ -72,7 +85,7 @@ transLine l@(CoreCond cond iftrue iffalse) = do
 
 
 
-doAssignType :: CAOSType -> CAOSToken a -> CAOSToken a -> KaosM (CAOS a)
+doAssignType :: CAOSType -> CAOSToken a -> CAOSToken a -> TransM (CAOS a)
 doAssignType t dest src
     | length clauses == 0
     = fail "Void type in assignment"
