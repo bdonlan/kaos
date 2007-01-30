@@ -1,4 +1,4 @@
-module Kaos.Core (Core(..), CoreBlock(..), CoreLine(..), lineAccess, CoreToken(..),
+module Kaos.Core (Core(..), CoreBlock(..), CoreLine(..), CoreToken(..),
              Note(..),
              AccessType(..),
              GenAccess(..),
@@ -33,47 +33,6 @@ instance Show CoreToken where
     show (TokenSlot (SA s ac)) = "$" ++ (show s) ++ "(" ++ (shortAccess ac) ++ ")"
     show (TokenConst c) = "#" ++ show c
 
-lineAccess :: CoreLine t -> [(Slot, AccessType)]
-lineAccess l
-    = M.toList $ foldl addAccess M.empty (lineAccess' l)
-    where
-        addAccess m (SA s ac) = M.alter updateKey s m
-            where
-            updateKey Nothing = Just ac
-            updateKey (Just a') = Just $ a' `mergeAccess` ac
-
-lineAccess' :: CoreLine f -> [GenAccess Slot]
-lineAccess' (CoreLine tokens) = concatMap findAccess tokens
-    where
-        findAccess (TokenSlot s) = [s]
-        findAccess _ = []
-lineAccess' (CoreAssign s1 s2) =
-    [SA s1 WriteAccess, SA s2 ReadAccess]
-lineAccess' (CoreConst s1 _) = [SA s1 WriteAccess]
-lineAccess' (CoreCond condition ifTrue ifFalse)
-    =  (lineAccess' $ CoreLine condition)
-    ++ map snd mergedAccess
-    where
-        mergedAccess = M.toList
-                        $ M.mapWithKey finishMerge
-                        $ M.unionWith (\(a, _) (b, _) -> (a, b))
-                          (buildMap ifTrue)
-                          (buildMap ifFalse)
-        buildMap :: CoreBlock a -> M.Map Slot (AccessType, AccessType)
-        buildMap l = M.map (\a -> (a, NoAccess)) $ blockAccess l
-        finishMerge slot (br1, br2) = SA slot (br1 `comb` br2)
-        comb x y | x == y         = x
-        comb x y
-            | MutateAccess `elem` [x, y]
-            = MutateAccess
-        comb NoAccess WriteAccess = MutateAccess
-        comb NoAccess ReadAccess  = ReadAccess
-        comb x y                  = comb y x
-lineAccess' _ = []
-
-blockAccess (CB b) =
-    M.unionsWith mergeAccess $ map (M.fromList . lineAccess . fst) b
-
 data CoreLine t =
     CoreLine [CoreToken]
   | CoreAssign Slot Slot -- dest src
@@ -81,6 +40,7 @@ data CoreLine t =
   | CoreNote   Note
   | CoreTouch  (GenAccess Slot)
   | CoreCond   [CoreToken] (CoreBlock t) (CoreBlock t)
+  | CoreLoop   (CoreBlock t)
   | CoreTypeSwitch { ctsSlot :: Slot
                    , ctsNum  :: CoreLine t 
                    , ctsStr  :: CoreLine t
@@ -99,6 +59,8 @@ instance Functor CoreLine where
         CoreCond cond (fmap f if_) (fmap f else_)
     fmap f (CoreTypeSwitch slot n s o) =
         CoreTypeSwitch slot (fmap f n) (fmap f s) (fmap f o)
+    fmap f (CoreLoop body ) =
+        CoreLoop (fmap f body) 
 
 showLine :: CoreLine f -> PrettyM ()
 showLine (CoreLine l) =
@@ -112,17 +74,18 @@ showLine (CoreNote n) =
 showLine (CoreTouch t) =
     emitLine $ "TOUCH " ++ show t
 showLine (CoreCond cond ifb elsb) = prefixFirst "IF " $ do
-    emitLine $ unwords (map show cond)
-    emitLine "{ "
-    withIndent 2 $ showBlock ifb
-    emitLine "} else {"
-    withIndent 2 $ showBlock elsb
-    emitLine "}"
+    prefixFirst "DOIF " $ emitLine $ unwords (map show cond)
+    withIndent 5 $ showBlock ifb
+    emitLine "ELSE"
+    withIndent 5 $ showBlock elsb
+    emitLine "ENDI"
 showLine (CoreTypeSwitch slot num str obj) = prefixFirst "CTS " $ do
     emitLine $ "CONTROL: " ++ show slot
     prefixFirst "NUM: " $ showLine num
     prefixFirst "STR: " $ showLine str
     prefixFirst "OBJ: " $ showLine obj
+showLine (CoreLoop body ) =
+    prefixFirst "LOOP " $ showBlock body
 showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show $ fmap (const ()) x)
 
 showBlock :: CoreBlock f -> PrettyM ()

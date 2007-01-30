@@ -83,7 +83,7 @@ transLine l@(CoreCond cond iftrue iffalse) = do
           ++ iffalse'
           ++ [CAOSLine $ [CAOSLiteral "endi"]]
 
-
+transLine l@(CoreLoop body ) = transBlock body
 
 doAssignType :: CAOSType -> CAOSToken a -> CAOSToken a -> TransM (CAOS a)
 doAssignType t dest src
@@ -106,7 +106,8 @@ doAssignType t dest src
             ,(typeObj, ([CAOSLiteral "eq", CAOSConst $ CInteger 3], "seta"))]
         possverbs = filter ((/= typeVoid) . (typeAnd t) . fst) allverbs
         clauses = map makeclause possverbs
+        prelude = [CAOSLiteral "TYPE", src]
         makeclause (_, (cond, verb)) =
-            (cond, CAOSLine [CAOSLiteral verb, dest, src])
+            (prelude ++ cond, CAOSLine [CAOSLiteral verb, dest, src])
 
 

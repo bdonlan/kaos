@@ -17,6 +17,8 @@ renameStatement (SBlock l)      = fmap SBlock $ mapM renameStatement l
 renameStatement (SExpr e)       = fmap SExpr  $ renameExpr e
 renameStatement (SCond c s1 s2) =
     liftM3 SCond (renameCond c) (renameStatement s1) (renameStatement s2)
+renameStatement (SDoUntil c s) =
+    liftM2 SDoUntil (renameCond c) (renameStatement s)
 
 renameExpr :: (Expression String) -> RenameT (Expression Slot)
 renameExpr (EConst c) = return $ EConst c

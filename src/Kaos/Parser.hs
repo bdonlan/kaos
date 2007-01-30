@@ -149,8 +149,18 @@ ifstmt = do
                             (reserved "else" >> (braces $ many statement))
     return $ SCond cond block1 block2
 
+dostmt = do
+    reserved "do"
+    block <- fmap SBlock $ braces $ many statement
+    cond <- while <|> until
+    return $ SDoUntil cond block
+    where
+        until = reserved "until" >> fmap BExpr expr
+        while = reserved "while" >> fmap (BNot . BExpr) expr
+
 statement = exprstmt
         <|> ifstmt
+        <|> dostmt
         <?> "statement"
 root = simpleScript
 

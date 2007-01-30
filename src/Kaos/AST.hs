@@ -82,9 +82,10 @@ constFloat = EConst . CFloat
 constString = EConst . CString
 
 data Statement l =
-    SExpr  (Expression l)
-  | SBlock [Statement l] 
-  | SCond (BoolExpr l) (Statement l) (Statement l)
+    SExpr    (Expression l)
+  | SBlock   [Statement l] 
+  | SDoUntil (BoolExpr l) (Statement l)
+  | SCond    (BoolExpr l) (Statement l) (Statement l)
     deriving (Eq, Ord, Data, Typeable)
 
 prettyStatement (SExpr e) = emitLine $ (show e) ++ ";"

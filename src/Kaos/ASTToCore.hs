@@ -30,6 +30,14 @@ astToCore' (SCond be btrue bfalse) = do
     let ctrue'  = unitBlock ctrue
     let cfalse' = unitBlock cfalse
     emit $ CoreCond cond ctrue' cfalse'
+astToCore' (SDoUntil cond stmt) = do
+    (_, stmt) <- censor (const []) $ listen $ do
+        emit $ CoreLine [TokenLiteral "LOOP"]
+        astToCore' stmt
+        cond' <- evalCond cond
+        emit $ CoreLine $ [TokenLiteral "UNTL"] ++ cond'
+    emit $ CoreLoop (unitBlock stmt)
+
 
 emit x = tell [x]
 

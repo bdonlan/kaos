@@ -105,6 +105,33 @@ markLine l@(CoreLine tokens) = do
             newStorage slot future
         updateStorage _ = return ()
 
+markLine l@(CoreLoop body) = do
+    trueFuture <- ask
+    future     <- setupFuture l trueFuture
+    body'      <- liftK $ markBlockFuture future body
+    body''     <- markBlock body'
+    return $ CoreLoop body''
+    where
+        setupFuture l trueFuture = do
+            acc <- liftK $ lineAccess l
+            debugKM $ show acc
+            let mut = map fst $ filter ((== MutateAccess) . snd) acc
+            mutF <- mapM fixReg mut
+            let future' = M.union (M.fromList mutF) trueFuture
+            return future'
+        fixReg slot = do
+            stor <- getStorage slot
+            case stor of
+                Just (Private r) -> return (slot, Bound r)
+                Nothing -> do
+                    future <- asks (M.lookup slot)
+                    newStorage slot future
+                    Just (Private r) <- getStorage slot
+                    return (slot, Bound r)
+                _ -> fail $ "Coreloop, bad fixreg storage " ++ show stor
+        
+
+
 markLine l@(CoreCond cond ontrue_ onfalse_) = do
     trueFuture <- ask
     future  <- setupFuture l trueFuture
@@ -125,7 +152,7 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
     where
         setupFuture :: CoreLine FutureS -> FutureS -> MarkM (M.Map Slot Lookahead)
         setupFuture l trueFuture = do
-            let acc = lineAccess l
+            acc <- liftK $ lineAccess l
             entries <- fmap concat $ mapM (flip setupEntry trueFuture) acc
             return $ M.fromList entries
         setupEntry (s, acc) future = setupEntry' (s, acc) (M.lookup s future)
