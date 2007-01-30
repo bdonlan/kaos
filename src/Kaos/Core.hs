@@ -32,19 +32,44 @@ instance Functor CoreToken where
 
 
 lineAccess :: (Ord t, Eq t) => CoreLine t -> [(t, AccessType)]
-lineAccess (CoreLine t)
-    = M.toList $ foldl addAccess M.empty (concatMap findAccess t)
+lineAccess l
+    = M.toList $ foldl addAccess M.empty (lineAccess' l)
     where
-        findAccess (TokenSlot s) = [s]
-        findAccess _ = []
         addAccess m (SA s ac) = M.alter updateKey s m
             where
             updateKey Nothing = Just ac
             updateKey (Just a') = Just $ a' `mergeAccess` ac
-lineAccess (CoreAssign s1 s2) =
-    [(s1, WriteAccess), (s2, ReadAccess)]
-lineAccess (CoreConst s1 _) = [(s1, WriteAccess)]
-lineAccess _ = []
+
+lineAccess' :: (Ord t, Eq t) => CoreLine t -> [GenAccess t]
+lineAccess' (CoreLine tokens) = concatMap findAccess tokens
+    where
+        findAccess (TokenSlot s) = [s]
+        findAccess _ = []
+lineAccess' (CoreAssign s1 s2) =
+    [SA s1 WriteAccess, SA s2 ReadAccess]
+lineAccess' (CoreConst s1 _) = [SA s1 WriteAccess]
+lineAccess' (CoreCond condition ifTrue ifFalse)
+    =  (lineAccess' $ CoreLine condition)
+    ++ map snd mergedAccess
+    where
+        mergedAccess = M.toList
+                        $ M.mapWithKey finishMerge
+                        $ M.unionWith (\(a, _) (b, _) -> (a, b))
+                          (buildMap ifTrue)
+                          (buildMap ifFalse)
+        buildMap :: Ord a => CoreBlock a -> M.Map a (AccessType, AccessType)
+        buildMap l = M.map (\a -> (a, NoAccess)) $ blockAccess l
+        finishMerge slot (br1, br2) = SA slot (br1 `comb` br2)
+        comb x y | x == y         = x
+        comb x y
+            | MutateAccess `elem` [x, y]
+            = MutateAccess
+        comb NoAccess WriteAccess = MutateAccess
+        comb NoAccess ReadAccess  = ReadAccess
+        comb x y                  = comb y x
+lineAccess' _ = []
+
+blockAccess b = M.unionsWith mergeAccess $ map (M.fromList . lineAccess) b
 
 data CoreLine t =
     CoreLine [CoreToken t]
@@ -52,6 +77,7 @@ data CoreLine t =
   | CoreConst  t ConstValue
   | CoreNote   Note
   | CoreTouch  (GenAccess t)
+  | CoreCond   [CoreToken t] (CoreBlock t) (CoreBlock t)
   | CoreTypeSwitch { ctsSlot :: t
                    , ctsNum  :: CoreLine t
                    , ctsStr  :: CoreLine t
@@ -67,6 +93,8 @@ instance Functor CoreLine where
     fmap f (CoreTouch (SA s a)) = CoreTouch (SA (f s) a)
     fmap f (CoreTypeSwitch s cn cs co) = CoreTypeSwitch (f s) (fmap f cn) (fmap f cs) (fmap f co)
     fmap _ (CoreNote n) = CoreNote n
+    fmap f (CoreCond cond ontrue onfalse)
+        = CoreCond (map (fmap f) cond) (map (fmap f) ontrue) (map (fmap f) onfalse)
 
 lineNormalize (CoreTypeSwitch s cn cs co)
     | slotType s == typeNum

@@ -15,7 +15,7 @@ import qualified Data.Map as M
 
 type Annotation m = TCT m ()
 
-newtype TypeCheckT m a = TCT (WriterT [Annotation m] m a)
+newtype TypeCheckT m a = TCT (TCT m a)
     deriving (Monad, MonadKaos, Functor)
 
 class (MonadKaos m', Monad m) => MonadTC m m' | m -> m' where
@@ -27,8 +27,8 @@ instance MonadKaos m => MonadTC (TypeCheckT m) m where
 instance (MonadKaos m', Monoid w, MonadTC m m') => MonadTC (WriterT w m) m' where
     liftTC = lift . liftTC
 
-sameType s1 s2 = liftTC . TCT $ tell [bindSlots s1 s2] >> return s1
-typeIs s1 t    = liftTC . TCT $ tell [constrainSlotType t s1]
+sameType s1 s2 = liftTC . TCT $ bindSlots s1 s2 >> return s1
+typeIs s1 t    = liftTC . TCT $ constrainSlotType t s1
 
 data St = St { typeVars :: M.Map Int (Either Int CAOSType)
              , slotVars :: M.Map Slot Int
@@ -85,10 +85,8 @@ translateSlot state slot = evalState m state
             return $ slot { slotType = t }
 
 typecheck :: (MonadKaos m) => (TypeCheckT m (Core Slot)) -> m (Core Slot)
-typecheck (TCT m) = do
-    (core, annotations) <- runWriterT m
-    flip evalStateT initSt $ do
-    sequence_ annotations
+typecheck (TCT m) = flip evalStateT initSt $ do
+    core <- m
     s <- get
     return . coreNormalize $ fmap (fmap $ translateSlot s) core
 

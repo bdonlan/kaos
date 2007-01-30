@@ -113,3 +113,41 @@ markLine l@(CoreLine tokens) = do
         markToken (TokenSlot sa@(SA (s, future) acc)) = do
             storage <- getStorage s
             return $ TokenSlot (SA (storage, s, future) acc)
+
+markLine l@(CoreCond cond _ _) = do
+    -- We use the usage information from the defutured variant to determine
+    -- what variables to pin
+    let l'@(CoreCond _ ontrue_ onfalse_) = fmap fst l
+    future  <- setupFuture l'
+    ontrue  <- lift . lift $ evalStateT (markBlockFuture ontrue_)  future
+    onfalse <- lift . lift $ evalStateT (markBlockFuture onfalse_) future
+    CoreLine cond' <- markLine (CoreLine cond)
+    s <- get
+    ontrue' <- markBlock ontrue
+    s_t <- get
+    put s
+    onfalse' <- markBlock onfalse
+    s_f <- get
+    let u1 = s_f `M.union` s_t
+    let u2 = s_t `M.union` s_f
+    when (u1 /= u2) $ fail $ "Storage states diverged: " ++ show (l, s_t, s_f, future)
+    put u1
+    return $ CoreCond cond' ontrue' onfalse'
+    where
+        setupFuture :: CoreLine Slot -> MarkM (M.Map Slot Lookahead)
+        setupFuture l = do
+            let acc = lineAccess l
+            entries <- fmap concat $ mapM setupEntry acc
+            return $ M.fromList entries
+        setupEntry :: (Slot, AccessType) -> MarkM [(Slot, Lookahead)]
+        setupEntry (slot, ReadAccess) = return []
+        setupEntry (slot, acc) = do
+            curAcc <- getStorage slot
+            case curAcc of
+                Just (Private r) -> return [(slot, Bound r)]
+                Nothing -> do
+                    Just (Private st) <- newStorage slot (Just Mutate) -- XXX: We may need to be bound here!
+                    return [(slot, Bound st)]
+                x -> fail $ "trying to bind a shared slot: " ++ show (x, acc, l)
+        setupEntry _ = return []
+        

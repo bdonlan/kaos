@@ -60,6 +60,18 @@ transLine l@(CoreAssign (destStorage, dest, destFuture) (srcStorage, src, srcFut
         doAssign r (Const s) =
             doAssignType (slotType dest) (CAOSRegister r) (CAOSConst s)
 
+transLine l@(CoreCond cond iftrue iffalse) = do
+    cond' <- (transLine (CoreLine $ (TokenLiteral "doif"):cond) :: KaosM (CAOS VirtRegister))
+    iftrue' <- (transBlock iftrue :: KaosM (CAOS VirtRegister))
+    iffalse' <- transBlock iffalse
+    return $ cond'
+          ++ iftrue'
+          ++ [CAOSLine $ [CAOSLiteral "else"]]
+          ++ iffalse'
+          ++ [CAOSLine $ [CAOSLiteral "endi"]]
+
+
+
 doAssignType :: CAOSType -> CAOSToken a -> CAOSToken a -> KaosM (CAOS a)
 doAssignType t dest src
     | length clauses == 0

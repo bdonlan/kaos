@@ -9,17 +9,25 @@ import Kaos.Typecheck
 import Data.Generics
 
 astToCore :: MonadKaos m => Statement Slot -> TypeCheckT m (Core Slot)
-astToCore (SExpr e) = do
-    (_, out) <- runWriterT $ expToCore e
-    return out
-astToCore (SBlock st) = fmap concat $ mapM astToCore st
+astToCore = fmap snd . runWriterT . astToCore'
+
+astToCore' :: MonadKaos m => Statement Slot -> CoreWriter m ()
+astToCore' (SExpr e) = do
+    expToCore e
+    return ()
+astToCore' (SBlock st) = mapM_ astToCore' st
+astToCore' (SCond be btrue bfalse) = do
+    cond        <- evalCond be
+    (_, ctrue)  <- censor (const []) $ listen $ astToCore' btrue
+    (_, cfalse) <- censor (const []) $ listen $ astToCore' bfalse
+    emit $ CoreCond cond ctrue cfalse
 
 emit x = tell [x]
 
 type CoreWriter m a = WriterT (CoreBlock Slot) (TypeCheckT m) a
 
-evalCond :: MonadKaos m => BoolExpr Slot -> CoreWriter m (BoolExpr Slot)
-evalCond = everywhereM (mkM eval)
+evalCond :: MonadKaos m => BoolExpr Slot -> CoreWriter m [CoreToken Slot]
+evalCond = fmap condToCore . everywhereM (mkM eval)
     where
         eval :: MonadKaos m => BoolExpr Slot -> CoreWriter m (BoolExpr Slot)
         eval (BCompare cmp e1 e2) = do
@@ -94,12 +102,11 @@ expToCore (ECall "__touch" [e]) = do
 
 expToCore e@(EBoolCast c) = do
     c' <- evalCond c
-    let cexp = condToCore c'
     s  <- newSlot
     s `typeIs` typeNum
 
     emit $ CoreLine $
-        [ TokenLiteral "doif" ] ++ cexp ++
+        [ TokenLiteral "doif" ] ++ c' ++
         [ TokenLiteral "setv", TokenSlot (SA s WriteAccess), TokenConst (CInteger 1) ] ++
         [ TokenLiteral "else" ] ++
         [ TokenLiteral "setv", TokenSlot (SA s WriteAccess), TokenConst (CInteger 0) ] ++

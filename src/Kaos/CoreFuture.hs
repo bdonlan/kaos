@@ -1,4 +1,4 @@
-module Kaos.CoreFuture (markFuture, Lookahead(..), Future) where
+module Kaos.CoreFuture (markFuture, markBlockFuture, Lookahead(..), Future) where
 
 import Kaos.Core
 import Kaos.Slot
@@ -25,6 +25,8 @@ getFuture = gets . M.lookup
 
 markFuture :: Core Slot -> KaosM (Core (Slot, Future))
 markFuture = flip evalStateT M.empty . markBlock
+
+markBlockFuture = markBlock
 
 markBlock :: Core Slot -> FutureM (Core (Slot, Future))
 markBlock = fmap reverse . mapM markLine . reverse
@@ -60,6 +62,29 @@ markLine line@(CoreLine tokens) = do
                 _              -> Just Mutate
         update (s, NoAccess)     = return ()
 
+markLine line@(CoreCond cond _ _) = do
+    let mergeAcc = lineAccess line
+    let line' = fmap (\s -> (s, error $ "marked CoreCond must be further resolved!" ++ show line)) line
+    let (CoreCond _ ontrue' onfalse') = line'
+    cond' <- mapM markToken cond
+    mapM_ update mergeAcc
+    return $ CoreCond cond' ontrue' onfalse'
+    where
+        -- XXX this is a copy of CoreLine above, find a way to merge the two
+        markToken (TokenConst c)       = return $ TokenConst c
+        markToken (TokenLiteral s)     = return $ TokenLiteral s
+        markToken (TokenSlot (SA s a)) = do
+            future <- gets (M.lookup s)
+            return $ TokenSlot (SA (s, future) a)
+        update :: (Slot, AccessType) -> FutureM ()
+        update (s, WriteAccess)  = modify $ M.delete s
+        update (s, ReadAccess)   = modify $ flip M.alter s (`mplus` Just Read)
+        update (s, MutateAccess) = modify . flip M.alter s $ \st ->
+            case st of
+                Just (Bound _) -> st
+                _              -> Just Mutate
+        update (s, NoAccess)     = return ()
+   
 markLine (CoreAssign dest src) = do
     fsrc  <- getFuture src
     fdest <- getFuture dest
@@ -71,8 +96,3 @@ markLine (CoreAssign dest src) = do
             modify $ M.alter (const fdest) src
         (_, _) -> return () -- overwrite; we don't set future as it's already non-Nothing
     return $ CoreAssign (dest, fdest) (src, fsrc)
-            
-markLine (CoreConst dest cv) = do
-    fdest <- getFuture dest
-    modify $ M.delete dest
-    return $ CoreConst (dest, fdest) cv

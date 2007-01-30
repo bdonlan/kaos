@@ -129,6 +129,9 @@ openSourceFile file = do
     h <- openFile file ReadMode
     return (file, h)
 
+dumpPass :: Show t => t -> KaosM t
+dumpPass d = debugKM (show d) >> return d
+
 coreCompile :: Statement String -> KaosM String
 coreCompile parses =
     runASTTransforms parses >>=
