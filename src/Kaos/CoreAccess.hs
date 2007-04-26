@@ -19,16 +19,23 @@ everywhereM' :: Monad m => GenericM m -> GenericM m
 -- Top-down order is also reflected in order of do-actions
 everywhereM' f x = gmapM (everywhereM' f) =<< (f x)
 
-dummyAccess :: a -> AccessMap
+dummyAccess :: CoreLine AccessMap -> AccessMap
 -- dummyAccess = const $ amSingle (Slot (-1) Nothing typeVoid) NoAccess
-dummyAccess = const $ error "Incorrect traversal order"
+dummyAccess l = error ("Incorrect traversal order at " ++ show l)
+
+wipeNotes :: Core () -> Core AccessMap
+wipeNotes = everywhere (mkT poison) . fmap (const mempty)
+    where
+        poison :: (CoreLine AccessMap, AccessMap)
+               -> (CoreLine AccessMap, AccessMap)
+        poison (line, _) = (line, dummyAccess line)
 
 markAccess :: Core t -> KaosM (Core (AccessMap))
 markAccess cb =
     fmap CB $ everywhereM' (mkM markLine) lines
     where
         lines = 
-            let CB l = fmap dummyAccess cb
+            let CB l = wipeNotes (fmap (const ()) cb)
             in  l
 
 amFromList :: [SlotAccess] -> AccessMap
@@ -66,17 +73,18 @@ markLine' (CoreCond condition ifTrue ifFalse) =
         return $ condA `mappend` trueA `mappend` falseA
 
 markLine' (CoreLoop body) = do
-    AM bodyAccess <- fmap blockAccess $ markAccess body
-    bodyFutures <- fmap snd $ markBlockFuture' M.empty body
+    body' <- markAccess body
+    let AM bodyAccess = blockAccess body'
+    bodyFutures <- fmap snd $ markBlockFuture' M.empty body'
     let bodyAcc' = M.mapWithKey (merge bodyFutures) bodyAccess
     return $ AM bodyAcc'
     where   
         merge future slot access = merge' (M.lookup slot future) access
-        merge' Nothing      ReadAccess  = ReadAccess
-        merge' Nothing      _           = WriteAccess
-        merge' (Just Read)  ReadAccess  = ReadAccess
-        merge' x            y           = trace ("merge' fallback: " ++ show (x, y)) MutateAccess
-        merge' _            _           = MutateAccess
+        merge' Nothing      ReadAccess    = ReadAccess
+        merge' Nothing      _             = WriteAccess
+        merge' (Just Read)  ReadAccess    = ReadAccess
+        merge' x            y             = trace ("merge' fallback: " ++ show (x, y)) MutateAccess
+        merge' _            _             = MutateAccess
 
 markLine' x = error $ "Don't know how to markLine' on " ++ show x
 
