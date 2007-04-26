@@ -172,7 +172,8 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
             entries <- fmap concat $ mapM (flip setupEntry tf') acc
             return $ M.fromList entries
         setupEntry (s, acc) future = setupEntry' (s, acc) (M.lookup s future)
-        setupEntry' (slot, ReadAccess) _ = return []
+        -- need to bind read slots to ensure they aren't improperly aliased
+--        setupEntry' (slot, ReadAccess) _ = return []
         setupEntry' _ Nothing            = return [] -- if we don't use it, it can go wherever (XXX: is this safe wrt underlying regalloc?)
         setupEntry' (slot, acc) future = do
             curAcc <- getStorage slot
