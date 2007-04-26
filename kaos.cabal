@@ -10,4 +10,4 @@ Executable:     kaos
 Main-Is:        Main.hs
 Hs-Source-Dirs: src
 ghc-options:    -Wall
-extensions:     MultiParamTypeClasses, UndecidableInstances, GeneralizedNewtypeDeriving
+extensions:     MultiParamTypeClasses, UndecidableInstances, GeneralizedNewtypeDeriving, BangPatterns
