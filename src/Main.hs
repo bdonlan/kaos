@@ -38,6 +38,7 @@ import Kaos.Parser
 import Kaos.Rename
 import Kaos.ASTToCore
 import Kaos.CoreToVirt
+import Kaos.CoreAccess
 import Kaos.CoreFuture
 import Kaos.CoreStorage
 import Kaos.RegAlloc
@@ -149,6 +150,8 @@ coreCompile parses =
     renameLexicals              >>=
     typecheck . astToCore       >>=
     dumpFlagged "dump-final-core" dumpCore >>=
+    markAccess                  >>=
+    dumpFlagged "dump-access-core" dumpCore >>=
     markFuture                  >>=
     markStorage                 >>=
     dumpFlagged "dump-marked-core" dumpCore >>=

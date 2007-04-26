@@ -1,4 +1,4 @@
-module Kaos.CoreStorage (markStorage, Storage(..), StorageS) where
+module Kaos.CoreStorage (markStorage, Storage(..), StorageS, getSM) where
 
 import Kaos.Core
 import Kaos.Slot
@@ -9,6 +9,7 @@ import Data.Generics
 import Control.Monad.State hiding (State)
 import qualified Control.Monad.State as S
 import Kaos.CoreFuture
+import Kaos.CoreAccess
 import Kaos.VirtRegister
 import Kaos.AST
 import Control.Monad.Reader
@@ -19,10 +20,23 @@ data Storage    = Private VirtRegister
                 | Shared  VirtRegister
                 | Const   ConstValue
                 | Phantom
-                deriving (Show, Eq, Data, Typeable)
+                deriving (Show, Eq, Ord, Data, Typeable)
 
-type StorageS = M.Map Slot Storage
-type MarkM a = ReaderT FutureS (StateT StorageS (VRegAllocT KaosM)) a
+type StorageMap = M.Map Slot Storage
+data StorageS = StorageS { ssStorage :: !StorageMap
+                         , ssFuture  :: !FutureS
+                         } deriving (Eq, Ord, Show, Data, Typeable)
+type MarkM a = ReaderT FutureS (StateT StorageMap (VRegAllocT KaosM)) a
+
+instance Futurable StorageS where getFuture = getFuture . ssFuture
+instance LineAccess StorageS where getLineAccess = getLineAccess . ssFuture
+
+getSM = ssStorage
+
+asksFuture :: (MonadReader f m, Futurable f)
+           => (FutureMap -> a)
+           -> m a
+asksFuture f = asks (f . getFuture)
 
 getStorage :: Slot -> MarkM (Maybe Storage)
 getStorage = lift . gets . M.lookup
@@ -35,26 +49,26 @@ newStorage slot _ = do
     vr <- lift . lift $ newVReg
     setStorage (Private vr) slot
 
-markStorage :: Core FutureS -> KaosM (Core (StorageS, FutureS))
+markStorage :: Core FutureS -> KaosM (Core StorageS)
 markStorage = runVRegAllocT . flip evalStateT M.empty . flip runReaderT undefined . markBlock
 
-markBlock :: Core FutureS -> MarkM (Core (StorageS, FutureS))
+markBlock :: Core FutureS -> MarkM (Core StorageS)
 markBlock (CB l) = fmap CB $ mapM enterLine l
     where
-        enterLine :: (CoreLine FutureS, FutureS) -> MarkM (CoreLine (StorageS, FutureS), (StorageS, FutureS))
+        enterLine :: (CoreLine FutureS, FutureS) -> MarkM (CoreLine StorageS, StorageS)
         enterLine (line, future) = do
             line' <- local (const future) $ markLine line
             storage <- get
-            return (line', (storage, future))
+            return (line', StorageS storage future)
 
-markLine :: CoreLine FutureS -> MarkM (CoreLine (StorageS, FutureS))
+markLine :: CoreLine FutureS -> MarkM (CoreLine StorageS)
 markLine (CoreTypeSwitch _ _ _ _) = fail "late CoreTypeSwitch"
 markLine l@(CoreNote t) = return $ fmap undefined l
 markLine l@(CoreTouch sa) = do
     markLine $ CoreLine [ TokenSlot sa ]
     return $ fmap undefined l
 markLine l@(CoreConst dest cv) = do
-    future <- asks (M.lookup dest)
+    future <- asksFuture (M.lookup dest)
     case future of
         Nothing -> return ()
         Just Read -> do
@@ -66,8 +80,8 @@ markLine l@(CoreConst dest cv) = do
     return $ fmap undefined l
 
 markLine l@(CoreAssign dest src) = do
-    fdest <- asks (M.lookup dest)
-    fsrc  <- asks (M.lookup  src)
+    fdest <- asksFuture (M.lookup dest)
+    fsrc  <- asksFuture (M.lookup  src)
     modify $ M.delete dest
     case (fdest, fsrc) of
         (Just (Bound b), _) -> do
@@ -101,21 +115,22 @@ markLine l@(CoreLine tokens) = do
         collect _ = return ()
 
         updateStorage (slot, WriteAccess) = do
-            future <- asks (M.lookup slot)
+            future <- asks (M.lookup slot . getFuture)
             newStorage slot future
         updateStorage _ = return ()
 
 markLine l@(CoreLoop body) = do
-    trueFuture <- ask
+    trueFuture <- asks getFuture
     future     <- setupFuture l trueFuture
     body'      <- liftK $ markBlockFuture future body
     body''     <- markBlock body'
     return $ CoreLoop body''
     where
+        setupFuture :: CoreLine FutureS -> FutureMap -> MarkM FutureMap
         setupFuture l trueFuture = do
-            acc <- liftK $ lineAccess l
+            acc <- asks getLineAccess
             debugKM $ show acc
-            let mut = map fst $ filter ((== MutateAccess) . snd) acc
+            let mut = map fst $ filter ((== MutateAccess) . snd) (M.toList $ getAM acc)
             mutF <- mapM fixReg mut
             let future' = M.union (M.fromList mutF) trueFuture
             return future'
@@ -124,7 +139,7 @@ markLine l@(CoreLoop body) = do
             case stor of
                 Just (Private r) -> return (slot, Bound r)
                 Nothing -> do
-                    future <- asks (M.lookup slot)
+                    future <- asksFuture (M.lookup slot)
                     newStorage slot future
                     Just (Private r) <- getStorage slot
                     return (slot, Bound r)
@@ -152,8 +167,9 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
     where
         setupFuture :: CoreLine FutureS -> FutureS -> MarkM (M.Map Slot Lookahead)
         setupFuture l trueFuture = do
-            acc <- liftK $ lineAccess l
-            entries <- fmap concat $ mapM (flip setupEntry trueFuture) acc
+            let acc = M.toList . getAM $ getLineAccess trueFuture
+            let tf' = getFuture trueFuture
+            entries <- fmap concat $ mapM (flip setupEntry tf') acc
             return $ M.fromList entries
         setupEntry (s, acc) future = setupEntry' (s, acc) (M.lookup s future)
         setupEntry' (slot, ReadAccess) _ = return []

@@ -18,21 +18,21 @@ import Control.Monad.Reader
 
 import qualified Data.Map as M
 
-type TransM a = ReaderT (StorageS, FutureS) KaosM a
+type TransM a = ReaderT StorageS KaosM a
 
-getStorage slot = asks (M.lookup slot . fst)
-getFuture  slot = asks (M.lookup slot . snd)
+lookupStorage slot = asks (M.lookup slot . getSM)
+lookupFuture  slot = asks (M.lookup slot . getFuture)
 
-coreToVirt :: Core (StorageS, FutureS) -> KaosM (CAOS VirtRegister)
+coreToVirt :: Core StorageS -> KaosM (CAOS VirtRegister)
 coreToVirt b = runReaderT (transBlock b) undefined
 
-transBlock :: CoreBlock (StorageS, FutureS) -> TransM (CAOSBlock VirtRegister)
+transBlock :: CoreBlock StorageS -> TransM (CAOSBlock VirtRegister)
 transBlock (CB l) = fmap concat $ mapM transLine_ l
     where
-        transLine_ :: (CoreLine (StorageS, FutureS), (StorageS, FutureS)) -> TransM [CAOSLine VirtRegister]
+        transLine_ :: (CoreLine StorageS, StorageS) -> TransM [CAOSLine VirtRegister]
         transLine_ (line, env) = local (const env) (transLine line)
 
-transLine :: CoreLine (StorageS, FutureS) -> TransM [CAOSLine VirtRegister]
+transLine :: CoreLine StorageS -> TransM [CAOSLine VirtRegister]
 transLine (CoreNote n) = return []
 transLine (CoreTouch _) = return []
 transLine line@(CoreLine l) = do
@@ -41,12 +41,12 @@ transLine line@(CoreLine l) = do
     where
         transToken (TokenLiteral l) = return $ CAOSLiteral l
         transToken (TokenConst c) = return $ CAOSConst c
-        transToken (TokenSlot (SA slot _)) = getStorage slot >>= transStorage
+        transToken (TokenSlot (SA slot _)) = lookupStorage slot >>= transStorage
         transStorage (Just (Private r)) = return $ CAOSRegister r
         transStorage (Just (Shared r)) = return $ CAOSRegister r
         transStorage (Just (Const c)) = return $ CAOSConst c
         transStorage x = fail $ "transLine: register storage in bad state: " ++ show line
-transLine (CoreConst slot c) = getStorage slot >>= checkAssign
+transLine (CoreConst slot c) = lookupStorage slot >>= checkAssign
     where
         checkAssign (Just (Private r)) = doAssign r
         checkAssign (Just (Const _))   = return []
@@ -54,10 +54,10 @@ transLine (CoreConst slot c) = getStorage slot >>= checkAssign
         checkAssign x                  = fail $ "doConstAssign: unexpected storage " ++ show x
         doAssign r = doAssignType (constType c) (CAOSRegister r) (CAOSConst c)
 transLine l@(CoreAssign dest src) = do
-    destStorage <- getStorage dest
-    destFuture  <- getFuture  dest
-    srcStorage  <- getStorage src
-    srcFuture   <- getFuture  src
+    destStorage <- lookupStorage dest
+    destFuture  <- lookupFuture  dest
+    srcStorage  <- lookupStorage src
+    srcFuture   <- lookupFuture  src
     checkAssign destStorage destFuture srcStorage srcFuture
     where
         checkAssign _ _ _ Nothing = return [] -- rename

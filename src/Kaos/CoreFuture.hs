@@ -1,5 +1,7 @@
 module Kaos.CoreFuture (
-    markFuture, markBlockFuture, Lookahead(..), FutureS, Future, lineAccess
+    markFuture, markBlockFuture, markBlockFuture',
+    Lookahead(..), Future,
+    Futurable(..), lineFuture, FutureMap, FutureS
     ) where
 
 import Kaos.Core
@@ -17,49 +19,63 @@ import qualified Data.Map as M
 data Lookahead = Bound VirtRegister
                | Read
                | Mutate
-               deriving (Show, Eq, Data, Typeable)
-type FutureS = M.Map Slot Lookahead
+               deriving (Show, Eq, Ord, Data, Typeable)
+
+type FutureMap = M.Map Slot Lookahead
+data FutureS = FutureS { fsFuture ::  FutureMap
+                       , fsAccess :: !AccessMap
+                       } deriving (Eq, Ord, Show, Data, Typeable)
 type Future  = Maybe Lookahead
 
+class Futurable a where getFuture :: a -> FutureMap
+instance Futurable FutureS where getFuture = fsFuture
+instance LineAccess FutureS where getLineAccess = fsAccess
 
-type FutureM a = StateT FutureS KaosM a
+lineFuture :: Futurable t => (CoreLine t, t) -> FutureMap
+lineFuture = getFuture . snd
 
-getFuture = gets . M.lookup
+type FutureM a = StateT FutureMap KaosM a
 
-markFuture :: Core a -> KaosM (Core FutureS)
+lookupFuture = gets . M.lookup
+
+markFuture :: LineAccess t => Core t -> KaosM (Core FutureS)
 markFuture = markBlockFuture M.empty
 
-markBlockFuture' :: FutureS -> Core a -> KaosM (Core FutureS, FutureS)
+markBlockFuture' ::
+    FutureMap -> Core AccessMap -> KaosM (Core FutureS, FutureMap)
 markBlockFuture' assumedFuture =
-    flip runStateT assumedFuture . markBlock . fmap (const ())
+    flip runStateT assumedFuture . markBlock
 
 
-markBlockFuture :: FutureS -> Core a -> KaosM (Core FutureS)
-markBlockFuture assumedFuture = fmap fst . markBlockFuture' assumedFuture
+markBlockFuture ::
+    LineAccess am => FutureMap -> Core am -> KaosM (Core FutureS)
+markBlockFuture assumedFuture =
+    fmap fst . markBlockFuture' assumedFuture . fmap getLineAccess
 
-markBlock :: Core () -> FutureM (Core FutureS)
+markBlock :: Core AccessMap -> FutureM (Core FutureS)
 markBlock (CB l) = do
     lines <- mapM markLine_ (reverse l)
     return $ CB (reverse lines)
     where
-        markLine_ :: (CoreLine (), ()) -> FutureM (CoreLine FutureS, FutureS)
-        markLine_ (line, _) = do
+        markLine_ :: (CoreLine AccessMap, AccessMap) -> FutureM (CoreLine FutureS, FutureS)
+        markLine_ (line, acc) = do
             future <- get
-            markLine line
-            return (fmap (const $ err line) line, future)
+            markLine line acc
+            return (fmap (zotFuture line) line, FutureS future acc)
+        zotFuture line am = FutureS (err line) am
         err line = error $ "Tried to use the future of a nested line: " ++ show line
 
-markLine :: CoreLine () -> FutureM ()
-markLine (CoreTypeSwitch _ _ _ _) = fail "late CoreTypeSwitch (TODO: extra translate stage)"
-markLine (CoreNote t) = return ()
-markLine (CoreTouch sa@(SA t acc)) = do
-    markLine $ CoreLine [ TokenSlot sa ]
-markLine (CoreConst dest cv) =
+markLine :: CoreLine AccessMap -> AccessMap -> FutureM ()
+markLine (CoreTypeSwitch _ _ _ _) _ = fail "late CoreTypeSwitch (TODO: extra translate stage)"
+markLine (CoreNote t) _ = return ()
+markLine (CoreTouch sa@(SA t acc)) accM = do
+    markLine (CoreLine [ TokenSlot sa ]) accM
+markLine (CoreConst dest cv) _ =
     modify $ M.delete dest
 
-markLine (CoreAssign dest src) = do
-    fsrc  <- getFuture src
-    fdest <- getFuture dest
+markLine (CoreAssign dest src) _ = do
+    fsrc  <- lookupFuture src
+    fdest <- lookupFuture dest
     modify $ M.delete dest
     case (fsrc, fdest) of
         (Nothing, Nothing) -> return () -- discard
@@ -68,9 +84,8 @@ markLine (CoreAssign dest src) = do
             modify $ M.alter (const fdest) src
         (_, _) -> return () -- overwrite; we don't set future as it's already non-Nothing
 
-markLine line = do
-    mergeAcc <- liftK $ lineAccess line
-    mapM_ update mergeAcc
+markLine line acc = do
+    mapM_ update (M.toList $ getAM acc)
     where
         update :: (Slot, AccessType) -> FutureM ()
         update (s, WriteAccess)  = modify $ M.delete s
@@ -87,7 +102,7 @@ markLine line = do
 
 
 
-
+{-
 lineAccess :: CoreLine t -> KaosM [(Slot, AccessType)]
 lineAccess l = do
     la' <- lineAccess' l
@@ -148,3 +163,4 @@ lineAccess' _ = return []
 blockAccess (CB b) = do
     las <- mapM (\(line, _) -> fmap M.fromList $ lineAccess line) b
     return $ M.unionsWith mergeAccess las
+-}

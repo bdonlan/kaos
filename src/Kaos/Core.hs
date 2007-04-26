@@ -1,10 +1,12 @@
 module Kaos.Core (Core(..), CoreBlock(..), CoreLine(..), CoreToken(..),
              Note(..),
              AccessType(..),
-             GenAccess(..),
+             AccessMap(..),
+             GenAccess(..), SlotAccess,
              coreNormalize,
              dumpCore,
              mergeAccess,
+             LineAccess(..), lineAccess
              ) where
 
 import Kaos.Slot
@@ -14,6 +16,7 @@ import qualified Data.Map as M
 import Kaos.PrettyM
 import Data.Char
 import Control.Arrow
+import Data.Monoid
 
 type Note = ()
 
@@ -62,7 +65,7 @@ instance Functor CoreLine where
     fmap f (CoreLoop body ) =
         CoreLoop (fmap f body) 
 
-showLine :: CoreLine f -> PrettyM ()
+showLine :: Show f => CoreLine f -> PrettyM ()
 showLine (CoreLine l) =
     emitLine $ "NORMAL " ++ unwords (map show l)
 showLine (CoreAssign dest src) =
@@ -88,8 +91,10 @@ showLine (CoreLoop body ) =
     prefixFirst "LOOP " $ showBlock body
 showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show $ fmap (const ()) x)
 
-showBlock :: CoreBlock f -> PrettyM ()
-showBlock (CB l) = mapM_ (showLine . fst) l
+showBlock :: Show f => CoreBlock f -> PrettyM ()
+showBlock (CB l) = mapM_ showpair l
+    where
+        showpair (l, info) = prefixFirst ((show info) ++ " ") (showLine l)
 
 lineNormalize (CoreTypeSwitch s cn cs co)
     | slotType s == typeNum
@@ -116,8 +121,24 @@ dumpCore = runPretty . showBlock
 data GenAccess t = SA t AccessType
     deriving (Show, Ord, Eq, Data, Typeable)
 
+type SlotAccess = GenAccess Slot
+
 data AccessType = NoAccess | ReadAccess | WriteAccess | MutateAccess
     deriving (Show, Ord, Eq, Data, Typeable)
+
+newtype AccessMap = AM { getAM :: M.Map Slot AccessType }
+    deriving (Eq, Ord, Show, Typeable, Data)
+
+instance Monoid AccessMap where
+    mempty = AM M.empty
+    mappend (AM a) (AM b) =
+        AM $ M.filter (/= NoAccess) $ M.unionWith comb a b
+        where
+            comb x y | x == y = x
+            comb MutateAccess _ = MutateAccess
+            comb WriteAccess ReadAccess = MutateAccess
+            comb NoAccess x = x
+            comb x y = comb y x
 
 mergeAccess x y | x == y = x
 mergeAccess NoAccess x = x
@@ -125,3 +146,11 @@ mergeAccess MutateAccess _ = MutateAccess
 mergeAccess ReadAccess WriteAccess = MutateAccess
 mergeAccess x y = mergeAccess y x
 
+class LineAccess t where
+    getLineAccess :: t -> AccessMap
+
+instance LineAccess AccessMap where getLineAccess = id
+
+lineAccess :: LineAccess t => (CoreLine t, t) -> AccessMap
+lineAccess  = getLineAccess . snd
+    
