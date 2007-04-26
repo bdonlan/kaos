@@ -108,7 +108,7 @@ lineNormalize l = l
 coreNormalize :: Core t -> Core t
 coreNormalize (CB l) = CB $ map (first lineNormalize) l
 
-newtype CoreBlock t = CB [(CoreLine t, t)]
+newtype CoreBlock t = CB { unCB :: [(CoreLine t, t)] }
     deriving (Show, Eq, Ord, Read, Data, Typeable)
 type Core t = CoreBlock t
 

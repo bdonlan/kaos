@@ -68,13 +68,13 @@ markLine' (CoreConst s1 _) = return $ amSingle s1 WriteAccess
 markLine' (CoreCond condition ifTrue ifFalse) =
     do
         condA  <- markLine' (CoreLine condition)
-        trueA  <- fmap blockAccess $ markAccess ifTrue
-        falseA <- fmap blockAccess $ markAccess ifFalse
+        trueA  <- blockAccess ifTrue
+        falseA <- blockAccess ifFalse
         return $ condA `mappend` trueA `mappend` falseA
 
 markLine' (CoreLoop body) = do
     body' <- markAccess body
-    let AM bodyAccess = blockAccess body'
+    let AM bodyAccess = blockAccess' body'
     bodyFutures <- fmap snd $ markBlockFuture' M.empty body'
     let bodyAcc' = M.mapWithKey (merge bodyFutures) bodyAccess
     return $ AM bodyAcc'
@@ -88,5 +88,21 @@ markLine' (CoreLoop body) = do
 
 markLine' x = error $ "Don't know how to markLine' on " ++ show x
 
-blockAccess (CB b) = mconcat . map snd $ b
+-- XXX: can this be merged with Lookahead somehow?
+baMergeAM (AM a) b = M.unionWith mergeOne a b
+    where
+        mergeOne x WriteAccess = x
+        mergeOne NoAccess x = x
+        mergeOne x NoAccess = x
+        mergeOne WriteAccess _ = NoAccess
+        mergeOne MutateAccess _ = MutateAccess
+        mergeOne ReadAccess NoAccess = ReadAccess
+        mergeOne ReadAccess x = x
+
+blockAccess' :: Core AccessMap
+             -> AccessMap
+blockAccess' = AM . foldr baMergeAM M.empty . map snd . unCB
+
+blockAccess :: Core a -> KaosM AccessMap
+blockAccess b = fmap blockAccess' $ markAccess b
 
