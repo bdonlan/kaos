@@ -19,6 +19,18 @@ renameStatement (SCond c s1 s2) =
     liftM3 SCond (renameCond c) (renameStatement s1) (renameStatement s2)
 renameStatement (SDoUntil c s) =
     liftM2 SDoUntil (renameCond c) (renameStatement s)
+renameStatement (SICaos l) = fmap SICaos $ mapM renameILine l
+
+renameILine (ICAssign v1 v2) = liftM2 ICAssign (lex2slot v1) (lex2slot v2)
+renameILine (ICConst v1 cv) = do
+    s <- lex2slot v1
+    return $ ICConst s cv
+renameILine (ICLine tl) = liftM ICLine $ mapM renameIToken tl
+
+renameIToken (ICVar l at) = do
+    s <- lex2slot l
+    return $ ICVar s at
+renameIToken (ICWord w) = return $ ICWord w
 
 renameExpr :: (Expression String) -> RenameT (Expression Slot)
 renameExpr (EConst c) = return $ EConst c
@@ -27,15 +39,17 @@ renameExpr (EBinaryOp s e1 e2) =
 renameExpr (EAssign e1 e2) =
     liftM2 EAssign (renameExpr e1) (renameExpr e2)
 renameExpr (ECall s e) = fmap (ECall s) $ mapM renameExpr e
-renameExpr (ELexical l) = do
+renameExpr (ELexical l) = fmap ELexical $ lex2slot l
+renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
+
+lex2slot l = do
     s <- get
     case M.lookup l s of
-        Just v -> return $ ELexical v
+        Just v -> return v
         Nothing -> do
             slot <- lift $ newSlot
             put $ M.insert l slot s
-            return $ ELexical slot
-renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
+            return slot
 
 renameCond (BAnd b1 b2) = liftM2 BAnd (renameCond b1) (renameCond b2)
 renameCond (BOr b1 b2) = liftM2 BOr (renameCond b1) (renameCond b2)

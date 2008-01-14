@@ -20,16 +20,19 @@
 -}
 module Kaos.AST (
             ConstValue(..), Expression(..), Statement(..),
-            constInt, constFloat, constString,
             CAOSType, typeAnd, typeOr,
             typeAny, typeNum, typeStr, typeObj, typeVoid,
             constType, comparisonToCAOS, BoolExpr(..),
-            Comparison(..),
+            Comparison(..), AccessType(..),
+            InlineCAOSToken(..), InlineCAOSLine(..),
             ) where
 
 import Data.List
 import Data.Generics
 import Kaos.PrettyM
+
+data AccessType = NoAccess | ReadAccess | WriteAccess | MutateAccess
+    deriving (Show, Ord, Eq, Data, Typeable)
 
 data ConstValue =
     CString  String
@@ -77,15 +80,23 @@ instance Show l => Show (Expression l) where
     show (ECall s e) = "call:" ++ s ++ show e
     show (EBoolCast c) = "bcast:" ++ (show c)
 
-constInt = EConst . CInteger
-constFloat = EConst . CFloat
-constString = EConst . CString
-
 data Statement l =
     SExpr    (Expression l)
   | SBlock   [Statement l] 
   | SDoUntil (BoolExpr l) (Statement l)
   | SCond    (BoolExpr l) (Statement l) (Statement l)
+  | SICaos   [InlineCAOSLine l]
+    deriving (Eq, Ord, Data, Typeable)
+
+data InlineCAOSLine l =
+    ICAssign l l
+  | ICConst l ConstValue
+  | ICLine [InlineCAOSToken l]
+    deriving (Eq, Ord, Data, Typeable)
+
+data InlineCAOSToken l =
+    ICVar l AccessType
+  | ICWord String
     deriving (Eq, Ord, Data, Typeable)
 
 prettyStatement (SExpr e) = emitLine $ (show e) ++ ";"

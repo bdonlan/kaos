@@ -1,6 +1,6 @@
 module Kaos.Core (Core(..), CoreBlock(..), CoreLine(..), CoreToken(..),
              Note(..),
-             AccessType(..),
+             Kaos.AST.AccessType(..),
              AccessMap(..),
              GenAccess(..), SlotAccess,
              coreNormalize,
@@ -122,9 +122,6 @@ data GenAccess t = SA t AccessType
     deriving (Show, Ord, Eq, Data, Typeable)
 
 type SlotAccess = GenAccess Slot
-
-data AccessType = NoAccess | ReadAccess | WriteAccess | MutateAccess
-    deriving (Show, Ord, Eq, Data, Typeable)
 
 newtype AccessMap = AM { getAM :: M.Map Slot AccessType }
     deriving (Eq, Ord, Show, Typeable, Data)

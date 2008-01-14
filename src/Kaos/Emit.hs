@@ -1,4 +1,4 @@
-module Kaos.Emit (emitCaos) where
+module Kaos.Emit (emitCaos, emitConst) where
 
 import Kaos.CAOS
 import Kaos.AST

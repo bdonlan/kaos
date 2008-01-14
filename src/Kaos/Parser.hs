@@ -27,6 +27,9 @@ import Text.ParserCombinators.Parsec.Expr
 import Monad (liftM, when)
 import Kaos.AST
 import Debug.Trace
+import Kaos.Emit (emitConst)
+import Kaos.Core (mergeAccess)
+-- TODO: move mergeAccess to AST
 
 import qualified IO
 
@@ -66,7 +69,7 @@ lexer  = P.makeTokenParser
                               "do", "until", "while", "forever", "enum",
                               "esee", "etch", "remove", "agent", "script",
                               "string", "atomic", "lock", "inst", "object",
-                              "define"]
+                              "define", "let", "_caos"]
          , caseSensitive   = True
          , commentLine     = "#"
          })
@@ -100,9 +103,9 @@ table   = [[Prefix (do { reservedOp "!"; return $ EBoolCast . BNot . BExpr})]
                       , ("==", CEQ), ("!=", CNE), ("/=", CNE)
                       ]
 
-integerV = fmap (constInt . fromIntegral) $ negWrap natural
+integerV = fmap (CInteger . fromIntegral) $ negWrap natural
 
-floatV = fmap constFloat $ negWrap float
+floatV = fmap CFloat $ negWrap float
 
 negWrap :: Num n => Parser n -> Parser n
 negWrap m = do
@@ -115,11 +118,12 @@ funcCall = do
     return $ ECall name args
     <?> "function call"
 
+constVal = (stringLit <|> try floatV <|> integerV)
+	<?> "constant value"
+
 factor  =   parens expr
         <|> try funcCall
-        <|> stringLit
-        <|> try floatV
-        <|> integerV
+		<|> liftM EConst constVal
         <|> lexical
         <?> "simple expression"
 
@@ -127,7 +131,7 @@ stringLit = do
         char '"'
         str <- liftM concat $ manyTill stringChar $ char '"'
         whiteSpace
-        return $ constString $ "\"" ++ str ++ "\""
+        return $ CString $ "\"" ++ str ++ "\""
     where
         stringChar =
             do { char '\\'; c <- anyChar; return ['\\', c] } <|>
@@ -158,11 +162,17 @@ dostmt = do
         until = reserved "until" >> fmap BExpr expr
         while = reserved "while" >> fmap (BNot . BExpr) expr
 
-statement = exprstmt
+statement = inlineCAOS
+		<|> exprstmt
         <|> ifstmt
         <|> dostmt
+		<|> nullStatement
         <?> "statement"
 root = simpleScript
+
+nullStatement = do
+	semi
+	return (SBlock [])
 
 simpleScript = do
     s <- many statement
@@ -171,3 +181,53 @@ simpleScript = do
 
 parser :: Parser (Statement String)
 parser = whiteSpace >> root >>> eof
+
+
+
+inlineCAOS = liftM SICaos (reserved "_caos" >> (braces $ many (caosStmt >>> semi)))
+	<?> "inline CAOS block"
+
+caosStmt = (caosAssign <|> caosCommand)
+	<?> "inline CAOS statement"
+
+caosAssign = do
+		reservedOp "."
+		reserved "let"
+		v1 <- caosVarName
+		symbol "="
+		try (finishConst v1) <|> (finishVar v1)
+	where
+		finishVar v1 = do
+			v2 <- caosVarName
+			return $ ICAssign v1 v2 
+		finishConst v1 = do
+			v2 <- constVal
+			return $ ICConst v1 v2
+caosCommand = liftM ICLine $ many caosWord
+
+caosWord = caosVarRef <|> try caosConstLiteral <|> caosWordLiteral
+
+caosVarRef = do
+	n <- caosVarName
+	ac <- caosVarAccess
+	whiteSpace
+	return $ ICVar n ac
+
+caosVarName = char '$' >> identifier
+
+caosVarAccess  = caosVarAccess' <?> "access mode"
+caosVarAccess' = parens $ do
+	modeflags <- many (oneOf "rwm" >>> whiteSpace)
+	return $ foldl mergeAccess NoAccess (map accessType modeflags)
+	where
+		accessType 'r' = ReadAccess
+		accessType 'w' = WriteAccess
+		accessType 'm' = MutateAccess
+
+caosWordLiteral = do
+	lead <- letter <|> oneOf "_"
+	remain <- many (alphaNum <|> oneOf "$#:?!_+-")
+	whiteSpace
+	return $ ICWord (lead:remain)
+
+caosConstLiteral = liftM (ICWord . emitConst) $ constVal

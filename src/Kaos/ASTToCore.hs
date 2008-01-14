@@ -38,9 +38,27 @@ astToCore' (SDoUntil cond stmt) = do
         emit $ CoreLine $ [TokenLiteral "UNTL"] ++ cond'
     emit $ CoreLoop (unitBlock stmt)
 
+astToCore' (SICaos caosGroups) = do
+    mapM_ emitILine caosGroups
+
+emitILine (ICAssign v1 v2) = do
+    expToCore (EAssign (ELexical v1) (ELexical v2))
+    return ()
+
+emitILine (ICConst v1 cv) = do
+    expToCore (EAssign (ELexical v1) (EConst cv))
+    return ()
+
+emitILine (ICLine tl) =
+    (emit . CoreLine) =<< mapM translateITok tl
+
+translateITok (ICVar l at) = do
+    slot <- expToCore (ELexical l)
+    return $ TokenSlot (SA slot at)
+
+translateITok (ICWord s) = return $ TokenLiteral s
 
 emit x = tell [x]
-
 
 evalCond :: MonadKaos m => BoolExpr Slot -> CoreWriter m [CoreToken]
 evalCond = fmap condToCore . everywhereM (mkM eval)
