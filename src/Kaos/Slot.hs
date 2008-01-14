@@ -10,8 +10,9 @@ data Slot = Slot { slotId :: Int
                  } deriving (Data, Typeable)
 
 instance Show Slot where
-    show (Slot id _ t) = (show id) ++ ":" ++ (show t)
+    show (Slot i _ t) = (show i) ++ ":" ++ (show t)
 
+equating :: Eq b => (a -> b) -> a -> a -> Bool
 equating f a b  =  f a == f b
 
 instance Enum Slot where

@@ -1,5 +1,5 @@
-module Kaos.Core (Core(..), CoreBlock(..), CoreLine(..), CoreToken(..),
-             Note(..),
+module Kaos.Core (Core, CoreBlock(..), CoreLine(..), CoreToken(..),
+             Note,
              Kaos.AST.AccessType(..),
              AccessMap(..),
              GenAccess(..), SlotAccess,
@@ -26,6 +26,8 @@ data CoreToken =
   | TokenConst   ConstValue
   deriving (Data, Typeable)
 
+-- XXX: needs to go in AST
+shortAccess :: AccessType -> String
 shortAccess NoAccess = ""
 shortAccess ReadAccess = "r"
 shortAccess WriteAccess = "w"
@@ -53,11 +55,11 @@ data CoreLine t =
   deriving (Show, Data, Typeable)
 
 instance Functor CoreLine where
-    fmap f (CoreLine l) = CoreLine l
-    fmap f (CoreAssign s1 s2) = CoreAssign s1 s2
-    fmap f (CoreConst s cv) = CoreConst s cv
-    fmap f (CoreNote n) = CoreNote n
-    fmap f (CoreTouch s) = CoreTouch s
+    fmap _ (CoreLine l) = CoreLine l
+    fmap _ (CoreAssign s1 s2) = CoreAssign s1 s2
+    fmap _ (CoreConst s cv) = CoreConst s cv
+    fmap _ (CoreNote n) = CoreNote n
+    fmap _ (CoreTouch s) = CoreTouch s
     fmap f (CoreCond cond if_ else_) =
         CoreCond cond (fmap f if_) (fmap f else_)
     fmap f (CoreTypeSwitch slot n s o) =
@@ -89,13 +91,14 @@ showLine (CoreTypeSwitch slot num str obj) = prefixFirst "CTS " $ do
     prefixFirst "OBJ: " $ showLine obj
 showLine (CoreLoop body ) =
     prefixFirst "LOOP " $ showBlock body
-showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show $ fmap (const ()) x)
+--showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show $ fmap (const ()) x)
 
 showBlock :: Show f => CoreBlock f -> PrettyM ()
 showBlock (CB l) = mapM_ showpair l
     where
-        showpair (l, info) = prefixFirst ((show info) ++ " ") (showLine l)
+        showpair (l', info) = prefixFirst ((show info) ++ " ") (showLine l')
 
+lineNormalize :: CoreLine x -> CoreLine x
 lineNormalize (CoreTypeSwitch s cn cs co)
     | slotType s == typeNum
     = lineNormalize cn
@@ -109,7 +112,7 @@ coreNormalize :: Core t -> Core t
 coreNormalize (CB l) = CB $ map (first lineNormalize) l
 
 newtype CoreBlock t = CB { unCB :: [(CoreLine t, t)] }
-    deriving (Show, Eq, Ord, Read, Data, Typeable)
+    deriving (Show, Eq, Ord, Data, Typeable)
 type Core t = CoreBlock t
 
 instance Functor CoreBlock where
@@ -137,6 +140,8 @@ instance Monoid AccessMap where
             comb NoAccess x = x
             comb x y = comb y x
 
+-- XXX: needs to go in AST
+mergeAccess :: AccessType -> AccessType -> AccessType
 mergeAccess x y | x == y = x
 mergeAccess NoAccess x = x
 mergeAccess MutateAccess _ = MutateAccess

@@ -32,18 +32,15 @@ wipeNotes = everywhere (mkT poison) . fmap (const mempty)
 
 markAccess :: Core t -> KaosM (Core (AccessMap))
 markAccess cb =
-    fmap CB $ everywhereM' (mkM markLine) lines
+    fmap CB $ everywhereM' (mkM markLine) ls
     where
-        lines = 
+        ls = 
             let CB l = wipeNotes (fmap (const ()) cb)
             in  l
 
-amFromList :: [SlotAccess] -> AccessMap
-amFromList  = mconcat
-            . map AM
-            . map (\sa@(SA k v) -> M.singleton k v)
-
+amSingle :: Slot -> AccessType -> AccessMap
 amSingle k v = AM $ M.singleton k v
+amFromSA :: SlotAccess -> AccessMap
 amFromSA (SA k v) = amSingle k v
 
 markLine :: (CoreLine AccessMap, AccessMap) -> KaosM (CoreLine AccessMap, AccessMap)
@@ -84,10 +81,12 @@ markLine' (CoreLoop body) = do
         merge' Nothing      _             = WriteAccess
         merge' (Just Read)  ReadAccess    = ReadAccess
         merge' x            y             = trace ("merge' fallback: " ++ show (x, y)) MutateAccess
-        merge' _            _             = MutateAccess
 
 markLine' x = error $ "Don't know how to markLine' on " ++ show x
 
+baMergeAM :: AccessMap
+          -> M.Map Slot AccessType
+          -> M.Map Slot AccessType
 -- XXX: can this be merged with Lookahead somehow?
 baMergeAM (AM a) b = M.unionWith mergeOne a b
     where
@@ -96,7 +95,6 @@ baMergeAM (AM a) b = M.unionWith mergeOne a b
         mergeOne x NoAccess = x
         mergeOne WriteAccess _ = NoAccess
         mergeOne MutateAccess _ = MutateAccess
-        mergeOne ReadAccess NoAccess = ReadAccess
         mergeOne ReadAccess x = x
 
 blockAccess' :: Core AccessMap

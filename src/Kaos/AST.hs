@@ -20,7 +20,7 @@
 -}
 module Kaos.AST (
             ConstValue(..), Expression(..), Statement(..),
-            CAOSType, typeAnd, typeOr,
+            CAOSType(ctNum, ctStr, ctObj), typeAnd, typeOr,
             typeAny, typeNum, typeStr, typeObj, typeVoid,
             constType, comparisonToCAOS, BoolExpr(..),
             Comparison(..), AccessType(..),
@@ -48,6 +48,7 @@ instance Show ConstValue where
 data Comparison = CLT | CEQ | CLE | CGT | CGE | CNE
     deriving (Eq, Ord, Show, Data, Typeable)
 
+comparisonToCAOS :: Comparison -> String
 comparisonToCAOS CLT = "lt"
 comparisonToCAOS CEQ = "eq"
 comparisonToCAOS CLE = "le"
@@ -99,11 +100,13 @@ data InlineCAOSToken l =
   | ICWord String
     deriving (Eq, Ord, Data, Typeable)
 
+prettyStatement :: Show t => Statement t -> PrettyM ()
 prettyStatement (SExpr e) = emitLine $ (show e) ++ ";"
 prettyStatement (SBlock b) = do
     emitLine "{"
     withIndent 2 $ mapM_ prettyStatement b
     emitLine "}"
+prettyStatement x = emitLine $ show x -- XXX
 
 instance Show l => Show (Statement l) where
     show = runPretty . prettyStatement
@@ -127,19 +130,28 @@ instance Show CAOSType where
                          (typeStr, "string"),
                          (typeObj, "object")]
 
+typeAnd :: CAOSType -> CAOSType -> CAOSType
 typeAnd (CAOSType a b c) (CAOSType a' b' c')
     = CAOSType (a && a') (b && b') (c && c')
+typeOr :: CAOSType -> CAOSType -> CAOSType
 typeOr (CAOSType a b c) (CAOSType a' b' c')
     = CAOSType (a || a') (b || b') (c || c')
 
+typeMatches :: CAOSType -> CAOSType -> Bool
 typeMatches a b = typeVoid /= (a `typeAnd` b)
 
+typeAny :: CAOSType
 typeAny = CAOSType True True True
+typeNum :: CAOSType
 typeNum = CAOSType True False False
+typeStr :: CAOSType
 typeStr = CAOSType False True False
+typeObj :: CAOSType
 typeObj = CAOSType False False True
+typeVoid :: CAOSType
 typeVoid = CAOSType False False False
 
+constType :: ConstValue -> CAOSType
 constType (CInteger _) = typeNum
 constType (CFloat _) = typeNum
 constType (CString _) = typeStr

@@ -1,7 +1,6 @@
 module Kaos.VirtRegister (VirtRegister(..), VRegAllocT, runVRegAllocT, newVReg) where
 
 import Kaos.SeqT
-import Control.Monad.Trans
 import Control.Monad.State
 import Data.Generics
 import Kaos.KaosM

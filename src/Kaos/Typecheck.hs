@@ -26,17 +26,21 @@ instance MonadKaos m => MonadTC (TypeCheckT m) m where
 instance (MonadKaos m', Monoid w, MonadTC m m') => MonadTC (WriterT w m) m' where
     liftTC = lift . liftTC
 
+sameType :: (MonadKaos mbase, Monad m, MonadTC m mbase) => Slot -> Slot -> m Slot
 sameType s1 s2 = liftTC . TCT $ bindSlots s1 s2 >> return s1
+typeIs :: (MonadKaos mbase, Monad m, MonadTC m mbase) => Slot -> CAOSType -> m ()
 typeIs s1 t    = liftTC . TCT $ constrainSlotType t s1
 
 data St = St { typeVars :: M.Map Int (Either Int CAOSType)
              , slotVars :: M.Map Slot Int
              } deriving (Show)
 
+initSt :: St
 initSt = St M.empty M.empty
 
 type TCT m a = StateT St m a
 
+getSlotVar' :: (Monad m, MonadState St m, MonadReader [Int] m) => Slot -> m Int
 getSlotVar' slot = do
     s <- get
     let slotVar = fromMaybe (slotId slot) (M.lookup slot $ slotVars s)
@@ -54,11 +58,13 @@ getSlotVar' slot = do
 getSlotVar :: (Monad m, MonadState St m) => Slot -> m Int
 getSlotVar = flip runReaderT [] . getSlotVar'
 
+getSlotType :: (Monad m, MonadState St m) => Slot -> m CAOSType
 getSlotType slot = do
     varId <- getSlotVar slot
     Right t <- liftM (fromMaybe (Right typeAny)) (gets (M.lookup varId . typeVars))
     return t
 
+constrainSlotType :: (Monad m, MonadState St m) => CAOSType -> Slot -> m ()
 constrainSlotType t slot = do
     oldType <- getSlotType slot
     varId <- getSlotVar slot
@@ -66,6 +72,7 @@ constrainSlotType t slot = do
     when (newType == typeVoid) $ fail "Unsatisfiable type constraint"
     modify $ \s -> s { typeVars = M.insert varId (Right newType) $ typeVars s }
 
+bindSlots :: (Monad m, MonadState St m) => Slot -> Slot -> m ()
 bindSlots s1 s2 = do
     t1 <- getSlotType s1
     t2 <- getSlotType s2
@@ -77,6 +84,7 @@ bindSlots s1 s2 = do
     when (var1 /= var2) $ do
     modify $ \s -> s { typeVars = M.insert var1 (Left var2) $ typeVars s}
 
+translateSlot :: St -> Slot -> Slot
 translateSlot state slot = evalState m state
     where
         m = do

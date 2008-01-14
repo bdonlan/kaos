@@ -9,7 +9,7 @@ import Data.Generics
 import Control.Monad.State hiding (State)
 import qualified Control.Monad.State as S
 import Kaos.CoreFuture
-import Kaos.CoreAccess
+--import Kaos.CoreAccess
 import Kaos.VirtRegister
 import Kaos.AST
 import Control.Monad.Reader
@@ -31,6 +31,7 @@ type MarkM a = ReaderT FutureS (StateT StorageMap (VRegAllocT KaosM)) a
 instance Futurable StorageS where getFuture = getFuture . ssFuture
 instance LineAccess StorageS where getLineAccess = getLineAccess . ssFuture
 
+getSM :: StorageS -> StorageMap
 getSM = ssStorage
 
 asksFuture :: (MonadReader f m, Futurable f)
@@ -63,7 +64,7 @@ markBlock (CB l) = fmap CB $ mapM enterLine l
 
 markLine :: CoreLine FutureS -> MarkM (CoreLine StorageS)
 markLine (CoreTypeSwitch _ _ _ _) = fail "late CoreTypeSwitch"
-markLine l@(CoreNote t) = return $ fmap undefined l
+markLine l@(CoreNote _) = return $ fmap undefined l
 markLine l@(CoreTouch sa) = do
     markLine $ CoreLine [ TokenSlot sa ]
     return $ fmap undefined l
@@ -97,8 +98,8 @@ markLine l@(CoreAssign dest src) = do
                 Nothing            -> fail "src storage was Nothing in markLine, alias case"
                 (Just (Private r)) -> setStorage (Shared r) src
                 _                  -> return ()
-            ssrc <- getStorage src
-            setStorage (fromJust ssrc) dest
+            ssrc' <- getStorage src
+            setStorage (fromJust ssrc') dest
         (_, _) -> do -- copy
             newStorage dest fdest
     return $ fmap undefined l
@@ -109,7 +110,7 @@ markLine l@(CoreLine tokens) = do
     return $ fmap undefined l
     where
         collect :: CoreToken -> S.State (M.Map Slot AccessType) ()
-        collect (TokenSlot sa@(SA s access)) = do
+        collect (TokenSlot (SA s access)) = do
             access' <- gets (fromMaybe NoAccess . M.lookup s)
             modify $ M.insert s (access' `mergeAccess` access)
         collect _ = return ()
@@ -127,7 +128,7 @@ markLine l@(CoreLoop body) = do
     return $ CoreLoop body''
     where
         setupFuture :: CoreLine FutureS -> FutureMap -> MarkM FutureMap
-        setupFuture l trueFuture = do
+        setupFuture _ trueFuture = do
             acc <- asks getLineAccess
             debugKM $ show acc
             let mut = map fst $ filter ((== MutateAccess) . snd) (M.toList $ getAM acc)
@@ -166,7 +167,7 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
     return $ CoreCond cond' ontrue' onfalse'
     where
         setupFuture :: CoreLine FutureS -> FutureS -> MarkM (M.Map Slot Lookahead)
-        setupFuture l trueFuture = do
+        setupFuture _ trueFuture = do
             let acc = M.toList . getAM $ getLineAccess trueFuture
             let tf' = getFuture trueFuture
             entries <- fmap concat $ mapM (flip setupEntry tf') acc
@@ -184,5 +185,4 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
                     Just (Private st) <- getStorage slot
                     return [(slot, Bound st)]
                 x -> fail $ "trying to bind a shared slot: " ++ show (x, acc, l)
-        setupEntry' _ _ = return []
         

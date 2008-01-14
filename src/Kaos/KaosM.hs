@@ -4,8 +4,6 @@ module Kaos.KaosM (runKaosM, KaosM, newSlot, debugKM, MonadKaos(..),
 
 import Kaos.SeqT
 import Kaos.Slot
-import Control.Monad.Identity
-import Control.Monad.Trans
 import Control.Monad.Reader
 import Control.Monad.Writer
 import Control.Monad.State

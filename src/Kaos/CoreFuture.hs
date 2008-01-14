@@ -12,7 +12,6 @@ import Data.Maybe
 import Data.Generics
 import Control.Monad.State hiding (State)
 import Kaos.VirtRegister
-import Debug.Trace
 
 import qualified Data.Map as M
 
@@ -36,6 +35,7 @@ lineFuture = getFuture . snd
 
 type FutureM a = StateT FutureMap KaosM a
 
+lookupFuture :: Slot -> FutureM Future
 lookupFuture = gets . M.lookup
 
 markFuture :: LineAccess t => Core t -> KaosM (Core FutureS)
@@ -54,8 +54,8 @@ markBlockFuture assumedFuture =
 
 markBlock :: Core AccessMap -> FutureM (Core FutureS)
 markBlock (CB l) = do
-    lines <- mapM markLine_ (reverse l)
-    return $ CB (reverse lines)
+    ls <- mapM markLine_ (reverse l)
+    return $ CB (reverse ls)
     where
         markLine_ :: (CoreLine AccessMap, AccessMap) -> FutureM (CoreLine FutureS, FutureS)
         markLine_ (line, acc) = do
@@ -67,10 +67,10 @@ markBlock (CB l) = do
 
 markLine :: CoreLine AccessMap -> AccessMap -> FutureM ()
 markLine (CoreTypeSwitch _ _ _ _) _ = fail "late CoreTypeSwitch (TODO: extra translate stage)"
-markLine (CoreNote t) _ = return ()
-markLine (CoreTouch sa@(SA t acc)) accM = do
+markLine (CoreNote _) _ = return ()
+markLine (CoreTouch sa) accM = do
     markLine (CoreLine [ TokenSlot sa ]) accM
-markLine (CoreConst dest cv) _ =
+markLine (CoreConst dest _) _ =
     modify $ M.delete dest
 
 markLine (CoreAssign dest src) _ = do
@@ -84,7 +84,7 @@ markLine (CoreAssign dest src) _ = do
             modify $ M.alter (const fdest) src
         (_, _) -> return () -- overwrite; we don't set future as it's already non-Nothing
 
-markLine line acc = do
+markLine _ acc = do
     mapM_ update (M.toList $ getAM acc)
     where
         update :: (Slot, AccessType) -> FutureM ()
@@ -94,7 +94,7 @@ markLine line acc = do
             case st of
                 Just (Bound _) -> st
                 _              -> Just Mutate
-        update (s, NoAccess)     = return ()
+        update (_, NoAccess)     = return ()
 
 
 
