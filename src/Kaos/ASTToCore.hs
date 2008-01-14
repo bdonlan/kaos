@@ -56,13 +56,14 @@ emitILine (ICLine tl) =
     (emit . CoreLine) =<< mapM translateITok tl
 
 emitILine (ICTargReader var body) = do
+    var `typeIs` typeObj
     bodyCore <- captureBlock $ mapM_ emitILine body
     emit $ CoreTargReader dummySlot var bodyCore
 
 emitILine (ICTargWriter var body) = do
+    var `typeIs` typeObj
     bodyCore <- captureBlock $ mapM_ emitILine body
     emit $ CoreTargWriter var bodyCore
-
 
 translateITok :: MonadKaos m => InlineCAOSToken Slot -> CoreWriter m CoreToken
 translateITok (ICVar l at) = do
