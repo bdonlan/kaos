@@ -46,6 +46,13 @@ data CoreLine t =
   | CoreTouch  (GenAccess Slot)
   | CoreCond   [CoreToken] (CoreBlock t) (CoreBlock t)
   | CoreLoop   (CoreBlock t)
+-- first slot is a temporary. It will be overwritten by Kaos.Targ
+-- this is horrible, fix it later :|
+--
+-- strict to keep me from making it undefined and later wondering why debug
+-- shows cause crashes
+  | CoreTargReader !Slot Slot (CoreBlock t)
+  | CoreTargWriter Slot (CoreBlock t)
   | CoreTypeSwitch { ctsSlot :: Slot
                    , ctsNum  :: CoreLine t 
                    , ctsStr  :: CoreLine t
@@ -60,6 +67,8 @@ instance Functor CoreLine where
     fmap _ (CoreConst s cv) = CoreConst s cv
     fmap _ (CoreNote n) = CoreNote n
     fmap _ (CoreTouch s) = CoreTouch s
+    fmap f (CoreTargReader ts s b) = CoreTargReader ts s (fmap f b)
+    fmap f (CoreTargWriter s b) = CoreTargWriter s (fmap f b)
     fmap f (CoreCond cond if_ else_) =
         CoreCond cond (fmap f if_) (fmap f else_)
     fmap f (CoreTypeSwitch slot n s o) =
@@ -91,6 +100,12 @@ showLine (CoreTypeSwitch slot num str obj) = prefixFirst "CTS " $ do
     prefixFirst "OBJ: " $ showLine obj
 showLine (CoreLoop body ) =
     prefixFirst "LOOP " $ showBlock body
+showLine (CoreTargReader ts slot body) = prefixFirst ("TARG ") $ do
+    emitLine $ "< temp:" ++ (show ts) ++ ", " ++ (show slot)
+    showBlock body
+showLine (CoreTargWriter slot body) = prefixFirst ("TARG ") $ do
+    emitLine $ "> " ++ (show slot)
+    showBlock body
 --showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show $ fmap (const ()) x)
 
 showBlock :: Show f => CoreBlock f -> PrettyM ()

@@ -38,8 +38,10 @@ import Kaos.CoreToVirt
 import Kaos.CoreAccess
 import Kaos.CoreFuture
 import Kaos.CoreStorage
+import Kaos.Targ
 import Kaos.RegAlloc
 import Kaos.Emit
+
 
 --import Debug.Trace
 
@@ -156,6 +158,8 @@ coreCompile parses =
     runASTTransforms parses     >>=
     renameLexicals              >>=
     typecheck . astToCore       >>=
+    dumpFlagged "dump-early-core" dumpCore >>=
+    targExpand                  >>=
     dumpFlagged "dump-final-core" dumpCore >>=
     markAccess                  >>=
     dumpFlagged "dump-access-core" dumpCore >>=

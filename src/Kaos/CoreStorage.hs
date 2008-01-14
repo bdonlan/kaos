@@ -186,3 +186,14 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
                     return [(slot, Bound st)]
                 x -> fail $ "trying to bind a shared slot: " ++ show (x, acc, l)
         
+
+markLine (CoreTargReader ts slot body) = do
+    markLine (CoreAssign ts slot)
+    markLine (CoreLine [TokenSlot (SA ts ReadAccess)])
+    body' <- markBlock body
+    return $ CoreTargReader ts slot body'
+
+markLine (CoreTargWriter slot body) = do
+    body' <- markBlock body
+    markLine (CoreLine [TokenSlot (SA slot WriteAccess)])
+    return $ CoreTargWriter slot body'

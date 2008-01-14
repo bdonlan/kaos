@@ -93,6 +93,8 @@ data InlineCAOSLine l =
     ICAssign l l
   | ICConst l ConstValue
   | ICLine [InlineCAOSToken l]
+  | ICTargReader l [InlineCAOSLine l]
+  | ICTargWriter l [InlineCAOSLine l]
     deriving (Eq, Ord, Data, Typeable)
 
 data InlineCAOSToken l =

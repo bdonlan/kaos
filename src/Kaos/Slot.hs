@@ -1,4 +1,4 @@
-module Kaos.Slot (Slot(..)) where
+module Kaos.Slot (Slot(..), dummySlot) where
 
 import Kaos.AST
 import Data.Ord
@@ -8,6 +8,9 @@ data Slot = Slot { slotId :: Int
                  , slotTrace :: Maybe () -- TODO
                  , slotType :: CAOSType
                  } deriving (Data, Typeable)
+
+dummySlot :: Slot
+dummySlot = Slot (-1) Nothing typeVoid
 
 instance Show Slot where
     show (Slot i _ t) = (show i) ++ ":" ++ (show t)

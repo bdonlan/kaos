@@ -81,8 +81,15 @@ markLine' (CoreLoop body) = do
         merge' Nothing      _             = WriteAccess
         merge' (Just Read)  ReadAccess    = ReadAccess
         merge' x            y             = trace ("merge' fallback: " ++ show (x, y)) MutateAccess
+markLine' (CoreTargReader ts s body) = do
+    bodyA <- blockAccess body
+    return $ amSingle ts MutateAccess `mappend` amSingle s ReadAccess `mappend` bodyA
+markLine' (CoreTargWriter s body) = do
+    bodyA <- blockAccess body
+    return $ amSingle s WriteAccess `mappend` bodyA
 
-markLine' x = error $ "Don't know how to markLine' on " ++ show x
+markLine' l@(CoreTypeSwitch _ _ _ _) = error $ "Late typeswitch: " ++ show l
+markLine' n@(CoreNote _) = error $ "CoreNote unimplemented" ++ show n
 
 baMergeAM :: AccessMap
           -> M.Map Slot AccessType

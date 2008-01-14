@@ -27,6 +27,10 @@ renameILine (ICConst v1 cv) = do
     s <- lex2slot v1
     return $ ICConst s cv
 renameILine (ICLine tl) = liftM ICLine $ mapM renameIToken tl
+renameILine (ICTargReader vs body) =
+    liftM2 ICTargReader (lex2slot vs) (mapM renameILine body)
+renameILine (ICTargWriter vs body) =
+    liftM2 ICTargWriter (lex2slot vs) (mapM renameILine body)
 
 renameIToken :: InlineCAOSToken String -> RenameT (InlineCAOSToken Slot)
 renameIToken (ICVar l at) = do

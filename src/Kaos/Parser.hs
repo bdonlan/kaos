@@ -33,8 +33,8 @@ import Kaos.Core (mergeAccess)
 
 whiteSpace :: Parser ()
 whiteSpace= P.whiteSpace lexer
---lexeme :: Parser String -> Parser String
---lexeme    = P.lexeme lexer
+lexeme :: Parser String -> Parser String
+lexeme    = P.lexeme lexer
 symbol :: String -> Parser String
 symbol    = P.symbol lexer
 natural :: Parser Integer
@@ -213,16 +213,24 @@ parser = whiteSpace >> root >>> eof
 
 
 inlineCAOS :: Parser (Statement String)
-inlineCAOS = liftM SICaos (reserved "_caos" >> (braces $ many (caosStmt >>> semi)))
+inlineCAOS = liftM SICaos (reserved "_caos" >> inlineCAOSBlock)
+    <?> "inline CAOS"
+
+inlineCAOSBlock :: Parser ([InlineCAOSLine String])
+inlineCAOSBlock = (braces $ many (caosStmt >>> semi))
     <?> "inline CAOS block"
 
 caosStmt :: Parser (InlineCAOSLine String)
-caosStmt = (caosAssign <|> caosCommand)
+caosStmt = (caosPragma <|> caosCommand)
     <?> "inline CAOS statement"
+
+caosPragma :: Parser (InlineCAOSLine String)
+caosPragma = do
+    reservedOp "."
+    (caosAssign <|> caosTarg)
 
 caosAssign :: Parser (InlineCAOSLine String)
 caosAssign = do
-        reservedOp "."
         reserved "let"
         v1 <- caosVarName
         symbol "="
@@ -234,6 +242,20 @@ caosAssign = do
         finishConst v1 = do
             v2 <- constVal
             return $ ICConst v1 v2
+
+caosTarg :: Parser (InlineCAOSLine String)
+caosTarg = do
+    reserved "targ"
+    dir <- lexeme $ liftM (:"") (oneOf "<>")
+    let op = mapOp dir
+    v <- caosVarName
+    body <- inlineCAOSBlock 
+    return $ op v body
+    where
+        mapOp ">" = ICTargWriter
+        mapOp "<" = ICTargReader
+        mapOp  _  = undefined
+
 caosCommand :: Parser (InlineCAOSLine String)
 caosCommand = liftM ICLine $ many caosWord
 

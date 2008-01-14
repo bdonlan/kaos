@@ -86,6 +86,8 @@ transLine (CoreCond cond iftrue iffalse) = do
 
 transLine (CoreLoop body ) = transBlock body
 transLine ts@(CoreTypeSwitch _ _ _ _) = error $ "Impossible: Late typeswitch: " ++ show ts
+transLine l@(CoreTargReader _ _ _) = error $ "Impossible: Late targreader: " ++ show l
+transLine l@(CoreTargWriter _ _) = error $ "Impossible: Late targwriter: " ++ show l
 
 doAssignType :: CAOSType -> CAOSToken a -> CAOSToken a -> TransM (CAOS a)
 doAssignType t dest src

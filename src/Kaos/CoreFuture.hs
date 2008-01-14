@@ -38,42 +38,49 @@ type FutureM a = StateT FutureMap KaosM a
 lookupFuture :: Slot -> FutureM Future
 lookupFuture = gets . M.lookup
 
-markFuture :: LineAccess t => Core t -> KaosM (Core FutureS)
-markFuture = markBlockFuture M.empty
+poisonFuture :: LineAccess t => Core t -> Core FutureS
+poisonFuture = fmap poison
+    where
+        poison la = FutureS (error "Using the future of a deep block") $
+                            getLineAccess la
 
-markBlockFuture' ::
-    FutureMap -> Core AccessMap -> KaosM (Core FutureS, FutureMap)
+markFuture :: LineAccess t => Core t -> KaosM (Core FutureS)
+markFuture = markBlockFuture M.empty . poisonFuture
+
+markBlockFuture' :: LineAccess t =>
+    FutureMap -> Core t -> KaosM (Core FutureS, FutureMap)
 markBlockFuture' assumedFuture =
-    flip runStateT assumedFuture . markBlock
+    flip runStateT assumedFuture . markBlock . poisonFuture
 
 
 markBlockFuture ::
-    LineAccess am => FutureMap -> Core am -> KaosM (Core FutureS)
+    FutureMap -> Core FutureS -> KaosM (Core FutureS)
 markBlockFuture assumedFuture =
-    fmap fst . markBlockFuture' assumedFuture . fmap getLineAccess
+    fmap fst . markBlockFuture' assumedFuture
 
-markBlock :: Core AccessMap -> FutureM (Core FutureS)
+markBlock :: Core FutureS -> FutureM (Core FutureS)
 markBlock (CB l) = do
     ls <- mapM markLine_ (reverse l)
     return $ CB (reverse ls)
     where
-        markLine_ :: (CoreLine AccessMap, AccessMap) -> FutureM (CoreLine FutureS, FutureS)
-        markLine_ (line, acc) = do
+        markLine_ :: (CoreLine FutureS, FutureS) -> FutureM (CoreLine FutureS, FutureS)
+        markLine_ (line, oldS) = do
+            let acc = getLineAccess oldS
             future <- get
-            markLine line acc
-            return (fmap (zotFuture line) line, FutureS future acc)
-        zotFuture line am = FutureS (err line) am
-        err line = error $ "Tried to use the future of a nested line: " ++ show line
+            line' <- markLine line acc
+            return (line', FutureS future acc)
 
-markLine :: CoreLine AccessMap -> AccessMap -> FutureM ()
+markLine :: CoreLine FutureS -> AccessMap -> FutureM (CoreLine FutureS)
 markLine (CoreTypeSwitch _ _ _ _) _ = fail "late CoreTypeSwitch (TODO: extra translate stage)"
-markLine (CoreNote _) _ = return ()
-markLine (CoreTouch sa) accM = do
+markLine cl@(CoreNote _) _ = return cl
+markLine cl@(CoreTouch sa) accM = do
     markLine (CoreLine [ TokenSlot sa ]) accM
-markLine (CoreConst dest _) _ =
+    return cl
+markLine cl@(CoreConst dest _) _ = do
     modify $ M.delete dest
+    return cl
 
-markLine (CoreAssign dest src) _ = do
+markLine cl@(CoreAssign dest src) _ = do
     fsrc  <- lookupFuture src
     fdest <- lookupFuture dest
     modify $ M.delete dest
@@ -83,9 +90,25 @@ markLine (CoreAssign dest src) _ = do
         (Nothing, _) -> do -- rename
             modify $ M.alter (const fdest) src
         (_, _) -> return () -- overwrite; we don't set future as it's already non-Nothing
+    return cl
 
-markLine _ acc = do
+markLine (CoreTargReader tempslot readslot block) _ = do
+    body <- markBlock block
+    -- TARG temp
+    markLine (CoreLine undefined) . AM $ M.singleton tempslot ReadAccess
+    -- temp = slot
+    markLine (CoreAssign tempslot readslot) undefined
+    return $ CoreTargReader tempslot readslot body
+
+markLine (CoreTargWriter slot block) _ = do
+    -- temp = TARG
+    markLine (CoreLine undefined) . AM $  M.singleton slot WriteAccess
+    body <- markBlock block
+    return $ CoreTargWriter slot body
+
+markLine l acc = do
     mapM_ update (M.toList $ getAM acc)
+    return l
     where
         update :: (Slot, AccessType) -> FutureM ()
         update (s, WriteAccess)  = modify $ M.delete s
@@ -95,72 +118,3 @@ markLine _ acc = do
                 Just (Bound _) -> st
                 _              -> Just Mutate
         update (_, NoAccess)     = return ()
-
-
-
-
-
-
-
-{-
-lineAccess :: CoreLine t -> KaosM [(Slot, AccessType)]
-lineAccess l = do
-    la' <- lineAccess' l
-    return $ M.toList $ foldl addAccess M.empty la'
-    where
-        addAccess m (SA s ac) = M.alter updateKey s m
-            where
-            updateKey Nothing = Just ac
-            updateKey (Just a') = Just $ a' `mergeAccess` ac
-
-lineAccess' :: CoreLine f -> KaosM [GenAccess Slot]
-lineAccess' (CoreLine tokens) = return $ concatMap findAccess tokens
-    where
-        findAccess (TokenSlot s) = [s]
-        findAccess _ = []
-lineAccess' (CoreAssign s1 s2) = return $ 
-    [SA s1 WriteAccess, SA s2 ReadAccess]
-lineAccess' (CoreConst s1 _) = return [SA s1 WriteAccess]
-lineAccess' (CoreCond condition ifTrue ifFalse)
-    = do
-        condLA <- lineAccess' $ CoreLine condition
-        ma     <- mergedAccess
-        return $ condLA ++ map snd ma
-    where
-        mergedAccess = do
-            ifTrue'  <- buildMap ifTrue
-            ifFalse' <- buildMap ifFalse
-            return $ M.toList
-                        $ M.mapWithKey finishMerge
-                        $ M.unionWith (\(a, _) (b, _) -> (a, b))
-                          ifTrue' ifFalse'
-        buildMap :: CoreBlock a -> KaosM (M.Map Slot (AccessType, AccessType))
-        buildMap = liftM (M.map (\a -> (a, NoAccess))) . blockAccess
-        finishMerge slot (br1, br2) = SA slot (br1 `comb` br2)
-        comb x y | x == y         = x
-        comb x y
-            | MutateAccess `elem` [x, y]
-            = MutateAccess
-        comb NoAccess WriteAccess = MutateAccess
-        comb NoAccess ReadAccess  = ReadAccess
-        comb x y                  = comb y x
-
-lineAccess' (CoreLoop body) = do
-    bodyAccess <- blockAccess body
-    bodyFutures <- fmap snd $ markBlockFuture' M.empty body 
-    let bodyAcc' = M.toList $ M.mapWithKey (merge bodyFutures) bodyAccess
-    debugKM $ unlines $ map (\k -> show (k, M.lookup k bodyFutures :: Future, M.lookup k (M.fromList bodyAcc') :: Maybe AccessType)) (map fst bodyAcc')
-    return $ map (uncurry SA) (bodyAcc')
-    where
-        merge future slot access = merge' (M.lookup slot future) access
-        merge' Nothing      ReadAccess  = ReadAccess
-        merge' Nothing      _           = WriteAccess
-        merge' (Just Read)  ReadAccess  = ReadAccess
-        merge' x            y           = trace ("merge' fallback: " ++ show (x, y)) MutateAccess
-        merge' _            _           = MutateAccess
-lineAccess' _ = return []
-
-blockAccess (CB b) = do
-    las <- mapM (\(line, _) -> fmap M.fromList $ lineAccess line) b
-    return $ M.unionsWith mergeAccess las
--}

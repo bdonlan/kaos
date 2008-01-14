@@ -10,6 +10,9 @@ import Data.Generics
 
 type CoreWriter m a = WriterT [CoreLine ()] (TypeCheckT m) a
 
+captureBlock :: MonadKaos m => CoreWriter m x -> CoreWriter m (CoreBlock ())
+captureBlock = liftM (unitBlock . snd) . censor (const []) . listen
+
 --XXX: should this be in Core?
 unitBlock :: [CoreLine ()] -> CoreBlock ()
 unitBlock = CB . map (\line -> (line, ()))
@@ -26,18 +29,16 @@ astToCore' (SExpr e) = do
 astToCore' (SBlock st) = mapM_ astToCore' st
 astToCore' (SCond be btrue bfalse) = do
     cond        <- evalCond be
-    (_, ctrue)  <- censor (const []) $ listen $ astToCore' btrue
-    (_, cfalse) <- censor (const []) $ listen $ astToCore' bfalse
-    let ctrue'  = unitBlock ctrue
-    let cfalse' = unitBlock cfalse
-    emit $ CoreCond cond ctrue' cfalse'
+    ctrue  <- captureBlock $ astToCore' btrue
+    cfalse <- captureBlock $ astToCore' bfalse
+    emit $ CoreCond cond ctrue cfalse
 astToCore' (SDoUntil cond stmt) = do
-    (_, stmt') <- censor (const []) $ listen $ do
+    stmt' <- captureBlock $ do
         emit $ CoreLine [TokenLiteral "LOOP"]
         astToCore' stmt
         cond' <- evalCond cond
         emit $ CoreLine $ [TokenLiteral "UNTL"] ++ cond'
-    emit $ CoreLoop (unitBlock stmt')
+    emit $ CoreLoop stmt'
 
 astToCore' (SICaos caosGroups) = do
     mapM_ emitILine caosGroups
@@ -53,6 +54,15 @@ emitILine (ICConst v1 cv) = do
 
 emitILine (ICLine tl) =
     (emit . CoreLine) =<< mapM translateITok tl
+
+emitILine (ICTargReader var body) = do
+    bodyCore <- captureBlock $ mapM_ emitILine body
+    emit $ CoreTargReader dummySlot var bodyCore
+
+emitILine (ICTargWriter var body) = do
+    bodyCore <- captureBlock $ mapM_ emitILine body
+    emit $ CoreTargWriter var bodyCore
+
 
 translateITok :: MonadKaos m => InlineCAOSToken Slot -> CoreWriter m CoreToken
 translateITok (ICVar l at) = do
