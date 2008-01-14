@@ -29,10 +29,7 @@ import Kaos.Typecheck
 import Kaos.AST
 import Kaos.ASTTransforms
 import Kaos.Core
-import Kaos.CAOS
 import Kaos.KaosM
-import Kaos.Slot
-import Kaos.VirtRegister
 
 import Kaos.Parser
 import Kaos.Rename
@@ -44,7 +41,7 @@ import Kaos.CoreStorage
 import Kaos.RegAlloc
 import Kaos.Emit
 
-import Debug.Trace
+--import Debug.Trace
 
 data Settings = Settings {
     helpOnly :: Bool,
@@ -63,6 +60,7 @@ instance Show Settings where
         ]
         
 
+defaults :: Settings
 defaults = Settings {
     helpOnly = False,
     versionOnly = False,
@@ -71,35 +69,39 @@ defaults = Settings {
     debugFlags = []
     }
 
+parseArgs :: Settings -> [String] -> IO Settings
 parseArgs s ("--help":_) = return $ s { helpOnly = True }
 parseArgs s ("--version":_) = return $ s { versionOnly = True }
-parseArgs s ((a@('-':'-':_)):_) = fail $ "Unknown argument " ++ a
+parseArgs _ ((a@('-':'-':_)):_) = fail $ "Unknown argument " ++ a
 parseArgs s (('-':t@(_:_)):remain) = parseShortArgs s t remain
 
-parseArgs s (file:tail) =
-    parseArgs (s { sourceFiles = file:sourceFiles s }) tail
+parseArgs s (file:t) =
+    parseArgs (s { sourceFiles = file:sourceFiles s }) t
 
 parseArgs s [] = return s
 
-setOutputFile s "" = fail "Cannot use an empty string as an output file"
+setOutputFile :: Settings -> String -> IO Settings
+setOutputFile _ "" = fail "Cannot use an empty string as an output file"
 
 setOutputFile s file =
     case outputFile s of
         "" -> return $ s { outputFile = file }
         _  -> fail "Can't set output file twice"
 
+parseShortArgs :: Settings -> String -> [String] -> IO Settings
+parseShortArgs _ [] _ = error "impossible"
 parseShortArgs s ('h':_) _ = return $ s { helpOnly = True }
 parseShortArgs s ('v':_) _ = return $ s { versionOnly = True }
 
 parseShortArgs s ('o':file@(_:_)) remain =
-    do  s <- setOutputFile s file
-        parseArgs s remain
+    do  s' <- setOutputFile s file
+        parseArgs s' remain
 
 parseShortArgs s ('o':[]) (file:remain) =
-    do  s <- setOutputFile s file
-        parseArgs s remain
+    do  s' <- setOutputFile s file
+        parseArgs s' remain
 
-parseShortArgs s ('o':[]) [] = fail "-o requires an argument"
+parseShortArgs _ ('o':[]) [] = fail "-o requires an argument"
 
 parseShortArgs s ('d':flag@(_:_)) remain =
     parseArgs (s { debugFlags = flag:(debugFlags s) }) remain
@@ -107,9 +109,11 @@ parseShortArgs s ('d':flag@(_:_)) remain =
 parseShortArgs s ('d':[]) (flag:remain) =
     parseArgs (s { debugFlags = flag:(debugFlags s) }) remain
 
-parseShortArgs s (x:_) _ = fail $ "Unknown short argument -" ++ [x]
+parseShortArgs _ (x:_) _ = fail $ "Unknown short argument -" ++ [x]
 
+versionStr :: String
 versionStr = "HaKaos v0.0"
+helpStr :: String
 helpStr = unlines $ versionStr:
     ["Usage: kaos [-o file] [--help] [--version] file [...]"
     ,""
@@ -119,11 +123,13 @@ helpStr = unlines $ versionStr:
     ,"--version Show program version"
     ]
 
+setDefaultOutputFile :: Settings -> Settings
 setDefaultOutputFile s =
     case outputFile s of
         "" -> s { outputFile = "output.cos" }
         _  -> s
 
+main :: IO ()
 main = do
     argv <- getArgs
     s <- parseArgs defaults argv
@@ -134,6 +140,7 @@ main = do
             then putStrLn versionStr
             else doCompile s'
 
+openSourceFile :: String -> IO (String, Handle)
 openSourceFile "-" = return ("(stdin)", stdin)
 openSourceFile file = do
     h <- openFile file ReadMode
@@ -162,6 +169,7 @@ coreCompile parses =
 runCompile :: [String] -> Statement String -> IO String
 runCompile flags = runKaosM flags . coreCompile
 
+doCompile :: Settings -> IO ()
 doCompile s = do
     when ((length $ sourceFiles s) == 0) $ fail "No source files"
     sourceHandles <- mapM openSourceFile $ sourceFiles s
@@ -169,6 +177,7 @@ doCompile s = do
     let merged = head parses
     putStrLn =<< runCompile (debugFlags s) merged
 
+parseFile :: (String, Handle) -> IO (Statement String)
 parseFile (name, handle) = do
     contents <- hGetContents handle
     let result = runParser parser () name contents
@@ -178,9 +187,3 @@ parseFile (name, handle) = do
             hPutStrLn stderr "Parse error:"
             hPrint stderr e
             exitFailure
-
-writeOpstream "-" o = putStr $ unlines o
-writeOpstream file o = do
-    handle <- openFile file WriteMode
-    hPutStr handle $ unlines o
-    hClose handle

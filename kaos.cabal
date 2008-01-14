@@ -9,5 +9,5 @@ Synopsis:       Kaos Compiler
 Executable:     kaos
 Main-Is:        Main.hs
 Hs-Source-Dirs: src
-ghc-options:    -Wall
+ghc-options:    -Wall -Werror
 extensions:     MultiParamTypeClasses, UndecidableInstances, GeneralizedNewtypeDeriving, BangPatterns

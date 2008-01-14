@@ -11,12 +11,13 @@ import Data.Generics
 type CoreWriter m a = WriterT [CoreLine ()] (TypeCheckT m) a
 
 --XXX: should this be in Core?
+unitBlock :: [CoreLine ()] -> CoreBlock ()
 unitBlock = CB . map (\line -> (line, ()))
 
 astToCore :: MonadKaos m => Statement Slot -> TypeCheckT m (Core ())
 astToCore ast = do
-    ((), lines) <- runWriterT $ astToCore' ast
-    return $ unitBlock (lines :: [CoreLine ()])
+    ((), ls) <- runWriterT $ astToCore' ast
+    return $ unitBlock (ls :: [CoreLine ()])
 
 astToCore' :: MonadKaos m => Statement Slot -> CoreWriter m ()
 astToCore' (SExpr e) = do
@@ -31,16 +32,17 @@ astToCore' (SCond be btrue bfalse) = do
     let cfalse' = unitBlock cfalse
     emit $ CoreCond cond ctrue' cfalse'
 astToCore' (SDoUntil cond stmt) = do
-    (_, stmt) <- censor (const []) $ listen $ do
+    (_, stmt') <- censor (const []) $ listen $ do
         emit $ CoreLine [TokenLiteral "LOOP"]
         astToCore' stmt
         cond' <- evalCond cond
         emit $ CoreLine $ [TokenLiteral "UNTL"] ++ cond'
-    emit $ CoreLoop (unitBlock stmt)
+    emit $ CoreLoop (unitBlock stmt')
 
 astToCore' (SICaos caosGroups) = do
     mapM_ emitILine caosGroups
 
+emitILine :: MonadKaos m => InlineCAOSLine Slot -> CoreWriter m ()
 emitILine (ICAssign v1 v2) = do
     expToCore (EAssign (ELexical v1) (ELexical v2))
     return ()
@@ -52,12 +54,14 @@ emitILine (ICConst v1 cv) = do
 emitILine (ICLine tl) =
     (emit . CoreLine) =<< mapM translateITok tl
 
+translateITok :: MonadKaos m => InlineCAOSToken Slot -> CoreWriter m CoreToken
 translateITok (ICVar l at) = do
     slot <- expToCore (ELexical l)
     return $ TokenSlot (SA slot at)
 
 translateITok (ICWord s) = return $ TokenLiteral s
 
+emit :: MonadKaos m => CoreLine () -> CoreWriter m ()
 emit x = tell [x]
 
 evalCond :: MonadKaos m => BoolExpr Slot -> CoreWriter m [CoreToken]
@@ -71,11 +75,13 @@ evalCond = fmap condToCore . everywhereM (mkM eval)
             return $ BCompare cmp (ELexical s1) (ELexical s2)
         eval x = return x
 
+condToCore :: BoolExpr Slot -> [CoreToken]
 condToCore (BAnd e1 e2) = (condToCore e1) ++ [TokenLiteral "&&"] ++ cmpToCore e2
 condToCore (BOr  e1 e2) = (condToCore e1) ++ [TokenLiteral "||"] ++ cmpToCore e2
 condToCore e = cmpToCore e
 
-cmpToCore c@(BCompare cmp (ELexical e1) (ELexical e2)) = 
+cmpToCore :: BoolExpr Slot -> [CoreToken]
+cmpToCore (BCompare cmp (ELexical e1) (ELexical e2)) = 
     [TokenSlot (SA e1 ReadAccess)
     ,TokenLiteral $ comparisonToCAOS cmp
     ,TokenSlot (SA e2 ReadAccess)
@@ -134,7 +140,7 @@ expToCore (ECall "__touch" [e]) = do
     emit $ CoreTouch (SA s MutateAccess)
     return s
 
-expToCore e@(EBoolCast c) = do
+expToCore (EBoolCast c) = do
     c' <- evalCond c
     s  <- newSlot
     s `typeIs` typeNum

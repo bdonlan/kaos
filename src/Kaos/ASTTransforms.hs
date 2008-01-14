@@ -8,14 +8,14 @@ import Kaos.AST
 import Data.Generics
 import Kaos.KaosM
 import Control.Monad
-import Debug.Trace
 
 condDepth :: (Show t) => BoolExpr t -> Int
 condDepth (BCompare _ _ _) = 0
 condDepth (BAnd e1 e2) = succ $ liftM2 max ($e1) ($e2) condDepth
 condDepth (BOr  e1 e2) = succ $ liftM2 max ($e1) ($e2) condDepth
-condDepth e            = 0 -- error $ "not in normal form: " ++ show e
+condDepth _            = 0 -- error $ "not in normal form: " ++ show e
 
+balanceConds :: Statement String -> Statement String
 balanceConds = everywhere (mkT balanceLocal)
     where
         balanceLocal :: BoolExpr String -> BoolExpr String
@@ -29,6 +29,7 @@ balanceConds = everywhere (mkT balanceLocal)
             | otherwise
             = t e1 e2
 
+expandConds :: Statement String -> Statement String
 expandConds = everywhere (mkT expLocal)
     where
         expLocal :: BoolExpr String -> BoolExpr String
@@ -85,6 +86,7 @@ foldNots = everywhere (mkT foldNot)
         invert (BOr  e1 e2) = BAnd (invert e1) (invert e2)
         invert (BNot e)     = e
         invert (BCompare c e1 e2) = BCompare (invertC c) e1 e2
+        invert e@(BExpr _)  = error $ "Internal error: Non-normal form in foldNots: " ++ show e
 
         invertC CLT = CGE
         invertC CLE = CGT
