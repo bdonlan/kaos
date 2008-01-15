@@ -1,17 +1,19 @@
+Near term:
+
 * Final regalloc stage STUBBED
-* CAOS emitter DONE-ISH
-* KaosM STUBBED
-* Tie up main DONE-ISH
-* internal structure pretty-printers
-* inlining expr types (SQRT etc - generalize the const subst stuff?)
-* constant folding across slots (a = 1; b = a + 1 stuff)
-* support for non-numeric types - 
-  * typechecking - decorate Core type?
-* Conditionals - how to handle booleans?
-(celebrate!)
-* TARG (hat u) - Core->Core pass? How to model targ-caching semantics?
-  - should Slot->VirtRegister be moved to Core?
-* error reporting - decorate everything with location information
-* inline CAOS
-* macros
-* top-level structure of some sort (State machine?)
+  on hold until it becomes a problem
+* Error/warning reporting
+* Better pretty-printing
+* Macros, root blocks - basic (CAOS model) structure for now
+  ETA: 2008-01-16
+  * After this point, work can begin on the prelude
+* Inline rvalue expressions into slots via the const propagation system
+  ETA: 2008-01-18
+* LValues other than slots
+  ETA: 2008-01-20
+
+Long term:
+
+* Smarter top-level design
+  ???
+* ...
