@@ -133,7 +133,6 @@ markLine l@(CoreLoop body) = do
         setupFuture :: CoreLine FutureS -> FutureMap -> MarkM FutureMap
         setupFuture _ trueFuture = do
             acc <- asks getLineAccess
-            debugKM $ show acc
             let mut = map fst $ filter ((== MutateAccess) . snd) (M.toList $ getAM acc)
             mutF <- mapM fixReg mut
             let future' = M.union (M.fromList mutF) trueFuture
