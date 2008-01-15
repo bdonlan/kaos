@@ -7,13 +7,16 @@ import Data.Generics
 import qualified Data.Map as M
 import Data.Maybe
 
+--import Debug.Trace
+
 import Kaos.AST
 import Kaos.Core
 import Kaos.Slot
 import Kaos.KaosM
 import Kaos.CoreAccess
-import Kaos.CoreFuture
-import Kaos.CoreStorage
+import Kaos.CoreAlias
+
+import qualified Kaos.AliasMap as AM
 
 {- Semantics of targ blocks:
   
@@ -67,30 +70,26 @@ import Kaos.CoreStorage
    (stripTarg)
 -}
 
-debugDumpCore :: String -> Core t -> KaosM (Core t)
+debugDumpCore :: Show t => String -> Core t -> KaosM (Core t)
 debugDumpCore tag core = do
     debugDump tag (dumpCore $ fmap (const ()) core)
+    debugDump (tag ++ "-raw") (dumpCore core)
     return core
 
 targExpand :: Core t -> KaosM (Core ())
 targExpand d = return (fmap (const ()) d)
            >>= tagTempSlots
-           >>= synthesizeAccesses
            >>= debugDumpCore "dump-targ-marked"
            >>= markAccess
            >>= expandForward
            >>= debugDumpCore "dump-targ-expanded"
            >>= markAccess -- may be out of date
-           >>= markFuture
-           >>= markStorage
-           >>= mergeReaders
-           >>= mergeWriters
+           >>= markAliasing
+           >>= mergeAdjacent
            >>= debugDumpCore "dump-targ-merged"
            >>= (return . (fmap (const ())))
-           >>= stripAccesses
-           >>= debugDumpCore "dump-targ-strip1"
            >>= stripTarg
-           >>= debugDumpCore "dump-targ-strip2"
+           >>= debugDumpCore "dump-targ-strip"
 
 tagTempSlots :: Core () -> KaosM (Core ())
 tagTempSlots = everywhereM (mkM tagLine)
@@ -101,22 +100,6 @@ tagTempSlots = everywhereM (mkM tagLine)
             let ts' = ts { slotType = typeObj }
             return $ CoreTargReader ts' s b
         tagLine l = return l
-
-synthesizeAccesses :: Core () -> KaosM (Core ())
-synthesizeAccesses = return . everywhere (mkT localAccesses)
-    where
-        localAccesses :: CoreBlock () -> CoreBlock ()
-        localAccesses (CB ls) =
-            CB (ls ++ map (\x -> (x, ())) accesses)
-            where
-                accesses =
-                    concatMap (\slot -> [CoreNote (PrivateNote "targ access")
-                                        ,CoreTouch (SA slot ReadAccess)
-                                        ])
-                              tempSlots
-                tempSlots = concatMap getTempSlots ls
-                getTempSlots ((CoreTargReader ts _ _), ()) = [ts]
-                getTempSlots _ = []
 
 usesTarg :: CoreLine t -> Bool
 usesTarg core = worker `runCont` id
@@ -129,7 +112,6 @@ usesTarg core = worker `runCont` id
                   -> Cont Bool (CoreLine ())
         checkTarg ret (CoreTargReader _ _ _) = ret True
         checkTarg ret (CoreTargWriter _ _) = ret True
-        checkTarg ret (CoreNote (PrivateNote "targ access")) = ret True
         checkTarg _ t = return t
 
 expandForward :: Core AccessMap -> KaosM (Core AccessMap)
@@ -137,6 +119,24 @@ expandForward = return . everywhere (mkT expandOne)
     where
         expandOne :: [(CoreLine AccessMap, AccessMap)]
                   -> [(CoreLine AccessMap, AccessMap)]
+        -- Special case: When expanding a sequence like this:
+        --   .targ > $obj { ... }; .let $var = $obj; .targ < $var { ... } ;
+        -- we must manually merge the assignment there. Currently this is
+        -- done by merging /backwards/ like so:
+        --
+        -- .let $var = $obj; .targ < $var { ... }; 
+        -- becomes
+        -- .targ < $obj { .let $var = $obj; ... };
+        --
+        -- We also handle the case where:
+        -- .let $var = $obj;
+        -- .targ < $obj { ... };
+        -- similarly
+        expandOne (a@(CoreAssign vdest vsrc, am1):(CoreTargReader ts s (CB blk), am2):remain)
+            | vdest == s || vsrc == s
+            = (CoreTargReader ts vsrc (CB $ a:blk), mergedAM):remain
+            where
+                mergedAM = am1 `mergeAM` am2
         expandOne orig@((curL, curAM):(nextL, nextAM):remain)
             | not eligible || usesTarg nextL || (isWrite && usesSlot)
             = orig
@@ -162,22 +162,25 @@ expandForward = return . everywhere (mkT expandOne)
                 nextAM' = getAM $ getLineAccess nextAM
         expandOne l = l
 
-mergeReaders :: Core StorageS -> KaosM (Core StorageS)
-mergeReaders = return
-
-mergeWriters :: Core StorageS -> KaosM (Core StorageS)
-mergeWriters = return
-
-stripAccesses :: Core () -> KaosM (Core ())
-stripAccesses = return . everywhere (mkT stripOneAccess)
+mergeAdjacent :: Core AliasTag -> KaosM (Core AliasTag)
+mergeAdjacent = return . everywhere (mkT mergeBlock)
     where
-        stripOneAccess :: [(CoreLine (), ())] -> [(CoreLine (), ())]
-        stripOneAccess ( (CoreNote (PrivateNote "targ access"), ())
-                        :(CoreTouch _, ())
-                        :remain
-                       )
-            = remain
-        stripOneAccess x = x
+        mergeBlock :: CoreBlock AliasTag -> CoreBlock AliasTag
+        mergeBlock (CB ls) = CB $ slidingMerge ls
+            where
+                slidingMerge (a@(lineA, aliasA):b@(lineB, aliasB):r)
+                    = case tryMerge lineA lineB aliasA aliasB of
+                        Just c  -> slidingMerge (c:r)
+                        Nothing -> a:(slidingMerge (b:r))
+                slidingMerge l = l
+
+                tryMerge (CoreTargReader ts1 s1 (CB blk1)) (CoreTargReader ts2 _ (CB blk2)) _ rAlias
+                    | AM.aliases ts1 ts2 rAlias
+                    = Just $ (CoreTargReader ts1 s1 (CB (blk1 ++ blk2)), rAlias)
+                tryMerge (CoreTargWriter s1 (CB blk1)) (CoreTargReader _ s2 (CB blk2)) wAlias rAlias
+                    | AM.aliases s1 s2 wAlias
+                    = Just $ (CoreTargWriter s1 (CB $ blk1 ++ blk2), rAlias)
+                tryMerge _ _ _ _ = Nothing
 
 stripTarg :: Core () -> KaosM (Core ())
 stripTarg = return . everywhere (mkT stripOneTarg)

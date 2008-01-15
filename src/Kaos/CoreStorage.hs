@@ -1,4 +1,4 @@
-module Kaos.CoreStorage (markStorage, Storage(..), StorageS, getSM) where
+module Kaos.CoreStorage (markStorage, Storage(..), StorageS(..), StorageMap, getSM) where
 
 import Kaos.Core
 import Kaos.Slot
@@ -58,8 +58,10 @@ markBlock (CB l) = fmap CB $ mapM enterLine l
     where
         enterLine :: (CoreLine FutureS, FutureS) -> MarkM (CoreLine StorageS, StorageS)
         enterLine (line, future) = do
+            debugDump "dump-storage-assignment" $ "MARKING:\n" ++ dumpCore (CB [(line, future)])
             line' <- local (const future) $ markLine line
             storage <- get
+            debugDump "dump-storage-assignment" $ " => " ++ show storage
             return (line', StorageS storage future)
 
 markLine :: CoreLine FutureS -> MarkM (CoreLine StorageS)
