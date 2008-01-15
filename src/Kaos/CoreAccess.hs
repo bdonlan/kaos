@@ -1,4 +1,4 @@
-module Kaos.CoreAccess (markAccess) where
+module Kaos.CoreAccess (markAccess, mergeAM) where
 
 import Kaos.Core
 import Kaos.Slot
@@ -42,6 +42,8 @@ amSingle :: Slot -> AccessType -> AccessMap
 amSingle k v = AM $ M.singleton k v
 amFromSA :: SlotAccess -> AccessMap
 amFromSA (SA k v) = amSingle k v
+amEmpty :: AccessMap
+amEmpty = AM $ M.empty
 
 markLine :: (CoreLine AccessMap, AccessMap) -> KaosM (CoreLine AccessMap, AccessMap)
 markLine (line, _) = do
@@ -89,7 +91,7 @@ markLine' (CoreTargWriter s body) = do
     return $ amSingle s WriteAccess `mappend` bodyA
 
 markLine' l@(CoreTypeSwitch _ _ _ _) = error $ "Late typeswitch: " ++ show l
-markLine' n@(CoreNote _) = error $ "CoreNote unimplemented" ++ show n
+markLine' (CoreNote _) = return amEmpty
 
 baMergeAM :: AccessMap
           -> M.Map Slot AccessType
@@ -103,6 +105,11 @@ baMergeAM (AM a) b = M.unionWith mergeOne a b
         mergeOne WriteAccess _ = NoAccess
         mergeOne MutateAccess _ = MutateAccess
         mergeOne ReadAccess x = x
+
+mergeAM :: AccessMap
+        -> AccessMap
+        -> AccessMap
+mergeAM a (AM b) = AM $ baMergeAM a b
 
 blockAccess' :: Core AccessMap
              -> AccessMap

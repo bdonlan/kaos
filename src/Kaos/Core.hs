@@ -1,5 +1,5 @@
 module Kaos.Core (Core, CoreBlock(..), CoreLine(..), CoreToken(..),
-             Note,
+             Note(..),
              Kaos.AST.AccessType(..),
              AccessMap(..),
              GenAccess(..), SlotAccess,
@@ -18,7 +18,8 @@ import Data.Char
 import Control.Arrow
 import Data.Monoid
 
-type Note = ()
+data Note = PrivateNote String
+        deriving (Show, Eq, Ord, Typeable, Data)
 
 data CoreToken =
     TokenLiteral String

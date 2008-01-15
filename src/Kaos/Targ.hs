@@ -1,6 +1,11 @@
 module Kaos.Targ (targExpand) where
 
+--import Control.Monad (guard)
+import Control.Monad.Cont
+
 import Data.Generics
+import qualified Data.Map as M
+import Data.Maybe
 
 import Kaos.AST
 import Kaos.Core
@@ -62,16 +67,30 @@ import Kaos.CoreStorage
    (stripTarg)
 -}
 
+debugDumpCore :: String -> Core t -> KaosM (Core t)
+debugDumpCore tag core = do
+    debugDump tag (dumpCore $ fmap (const ()) core)
+    return core
 
 targExpand :: Core t -> KaosM (Core ())
 targExpand d = return (fmap (const ()) d)
            >>= tagTempSlots
+           >>= synthesizeAccesses
+           >>= debugDumpCore "dump-targ-marked"
            >>= markAccess
+           >>= expandForward
+           >>= debugDumpCore "dump-targ-expanded"
+           >>= markAccess -- may be out of date
            >>= markFuture
            >>= markStorage
-           >>= globalTransform
+           >>= mergeReaders
+           >>= mergeWriters
+           >>= debugDumpCore "dump-targ-merged"
            >>= (return . (fmap (const ())))
+           >>= stripAccesses
+           >>= debugDumpCore "dump-targ-strip1"
            >>= stripTarg
+           >>= debugDumpCore "dump-targ-strip2"
 
 tagTempSlots :: Core () -> KaosM (Core ())
 tagTempSlots = everywhereM (mkM tagLine)
@@ -83,23 +102,81 @@ tagTempSlots = everywhereM (mkM tagLine)
             return $ CoreTargReader ts' s b
         tagLine l = return l
 
-globalTransform :: Core StorageS -> KaosM (Core StorageS)
-globalTransform t = expandForward t
-                >>= expandBack
-                >>= mergeReader
-                >>= mergeWriter
+synthesizeAccesses :: Core () -> KaosM (Core ())
+synthesizeAccesses = return . everywhere (mkT localAccesses)
+    where
+        localAccesses :: CoreBlock () -> CoreBlock ()
+        localAccesses (CB ls) =
+            CB (ls ++ map (\x -> (x, ())) accesses)
+            where
+                accesses =
+                    concatMap (\slot -> [CoreNote (PrivateNote "targ access")
+                                        ,CoreTouch (SA slot ReadAccess)
+                                        ])
+                              tempSlots
+                tempSlots = concatMap getTempSlots ls
+                getTempSlots ((CoreTargReader ts _ _), ()) = [ts]
+                getTempSlots _ = []
 
-expandForward :: Core StorageS -> KaosM (Core StorageS)
-expandForward = return
+usesTarg :: CoreLine t -> Bool
+usesTarg core = worker `runCont` id
+    where
+        worker = callCC $ \ret -> do
+            everywhereM (mkM (checkTarg ret)) $ fmap (const ()) core
+            return False
+        checkTarg :: (Bool -> Cont Bool (CoreLine ()))
+                  -> CoreLine ()
+                  -> Cont Bool (CoreLine ())
+        checkTarg ret (CoreTargReader _ _ _) = ret True
+        checkTarg ret (CoreTargWriter _ _) = ret True
+        checkTarg _ t = return t
 
-expandBack :: Core StorageS -> KaosM (Core StorageS)
-expandBack = return
+expandForward :: Core AccessMap -> KaosM (Core AccessMap)
+expandForward = return . everywhere (mkT expandOne)
+    where
+        expandOne :: [(CoreLine AccessMap, AccessMap)]
+                  -> [(CoreLine AccessMap, AccessMap)]
+        expandOne orig@((curL, curAM):(nextL, nextAM):remain)
+            | not eligible || usesTarg nextL || (isWrite && usesSlot)
+            = orig
+            | otherwise
+            = (newL, curAM `mergeAM` nextAM):remain
+            where
+                (eligible, isWrite, mySlot, newL) = check curL
+                check (CoreTargReader ts s (CB block))
+                    =   (True
+                        ,False
+                        ,s
+                        ,CoreTargReader ts s (CB $ block ++ [(nextL, nextAM)])
+                        )
+                check (CoreTargWriter s (CB block))
+                    =   (True
+                        ,True
+                        ,s
+                        ,CoreTargWriter s(CB $ block ++ [(nextL, nextAM)])
+                        )
+                check _ = (False, undefined, undefined, undefined)
+                usesSlot =
+                    isJust $ M.lookup mySlot nextAM' >>= guard . (/= NoAccess)
+                nextAM' = getAM $ getLineAccess nextAM
+        expandOne l = l
 
-mergeReader :: Core StorageS -> KaosM (Core StorageS)
-mergeReader = return
+mergeReaders :: Core StorageS -> KaosM (Core StorageS)
+mergeReaders = return
 
-mergeWriter :: Core StorageS -> KaosM (Core StorageS)
-mergeWriter = return
+mergeWriters :: Core StorageS -> KaosM (Core StorageS)
+mergeWriters = return
+
+stripAccesses :: Core () -> KaosM (Core ())
+stripAccesses = return . everywhere (mkT stripOneAccess)
+    where
+        stripOneAccess :: [(CoreLine (), ())] -> [(CoreLine (), ())]
+        stripOneAccess ( (CoreNote (PrivateNote "targ access"), ())
+                        :(CoreTouch _, ())
+                        :remain
+                       )
+            = remain
+        stripOneAccess x = x
 
 stripTarg :: Core () -> KaosM (Core ())
 stripTarg = return . everywhere (mkT stripOneTarg)
