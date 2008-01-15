@@ -7,6 +7,7 @@ import Kaos.KaosM
 import Control.Monad.Writer
 import Kaos.Typecheck
 import Data.Generics
+import Data.Maybe
 
 type CoreWriter m a = WriterT [CoreLine ()] (TypeCheckT m) a
 
@@ -99,6 +100,35 @@ cmpToCore (BCompare cmp (ELexical e1) (ELexical e2)) =
     ]
 cmpToCore e = error $ "unexpected non-normal form: " ++ show e
 
+binaryFolder :: String -> Slot -> Slot -> Slot -> Folder
+binaryFolder op dest s1 s2
+    | isJust $ ops op
+    = \varlookup -> 
+        case (varlookup s1, varlookup s2) of
+            (Just v1, Just v2) -> Just [CoreConst dest (mathOp v1 v2)]
+            _                  -> Nothing
+    | otherwise
+    = const Nothing
+    where
+        promote (CInteger i1) = CFloat $ fromIntegral i1
+        promote v@(CFloat _) = v
+        promote x = error $ "Bad type in constant folding: " ++ show x
+        mathOp (CFloat f1) (CFloat f2) = CFloat $ floatOp op f1 f2
+        mathOp (CInteger i1) (CInteger i2) = CInteger $ intOp op i1 i2
+        mathOp a b = mathOp (promote a) (promote b)
+
+        ops :: String -> Maybe (Double -> Double -> Double, Int -> Int -> Int)
+        ops "mulv" = Just ((*), (*))
+        ops "subv" = Just ((-), (-))
+        ops "addv" = Just ((+), (+))
+        ops "divv" = Just ((/), div)
+        ops  _  = Nothing
+
+        floatOp :: String -> (Double -> Double -> Double)
+        floatOp = fst . fromJust . ops
+        intOp :: String -> (Int -> Int -> Int)
+        intOp   = snd . fromJust . ops
+
 expToCore :: MonadKaos m => Expression Slot -> CoreWriter m Slot
 expToCore (EConst c) = do
     s <- newSlot
@@ -113,7 +143,8 @@ expToCore (EBinaryOp op e1 e2) = do
     s1 `sameType` s2
     s1 `sameType` dest
     emit $ CoreAssign dest s1
-    emit $ CoreLine [ TokenLiteral op
+    emit $ CoreFoldable (binaryFolder op dest s1 s2)
+         $ CoreLine [ TokenLiteral op
                     , TokenSlot (SA dest MutateAccess)
                     , TokenSlot (SA s2   ReadAccess)
                     ]

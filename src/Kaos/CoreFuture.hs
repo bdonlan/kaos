@@ -39,24 +39,26 @@ lookupFuture :: Slot -> FutureM Future
 lookupFuture = gets . M.lookup
 
 poisonFuture :: LineAccess t => Core t -> Core FutureS
-poisonFuture = fmap poison
+poisonFuture = everywhere (mkT poison) . fmap (\la -> FutureS undefined (getLineAccess la))
     where
-        poison la = FutureS (error "Using the future of a deep block") $
-                            getLineAccess la
+        poison :: (CoreLine FutureS, FutureS) -> (CoreLine FutureS, FutureS)
+        poison (l, la) = (l, FutureS err (getLineAccess la))
+            where
+                err = error $ "Using the future of a deep block: " ++
+                                show (fmap (const ()) l)
 
 markFuture :: LineAccess t => Core t -> KaosM (Core FutureS)
 markFuture = markBlockFuture M.empty . poisonFuture
-
-markBlockFuture' :: LineAccess t =>
-    FutureMap -> Core t -> KaosM (Core FutureS, FutureMap)
-markBlockFuture' assumedFuture =
-    flip runStateT assumedFuture . markBlock . poisonFuture
-
 
 markBlockFuture ::
     FutureMap -> Core FutureS -> KaosM (Core FutureS)
 markBlockFuture assumedFuture =
     fmap fst . markBlockFuture' assumedFuture
+
+markBlockFuture' :: LineAccess t =>
+    FutureMap -> Core t -> KaosM (Core FutureS, FutureMap)
+markBlockFuture' assumedFuture = 
+    flip runStateT assumedFuture . markBlock . poisonFuture
 
 markBlock :: Core FutureS -> FutureM (Core FutureS)
 markBlock (CB l) = do

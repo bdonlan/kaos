@@ -4,9 +4,10 @@ module Kaos.Core (Core, CoreBlock(..), CoreLine(..), CoreToken(..),
              AccessMap(..),
              GenAccess(..), SlotAccess,
              coreNormalize,
-             dumpCore,
+             dumpCore, dumpCoreLine,
              mergeAccess,
-             LineAccess(..), lineAccess
+             LineAccess(..), lineAccess,
+             Folder
              ) where
 
 import Kaos.Slot
@@ -39,6 +40,9 @@ instance Show CoreToken where
     show (TokenSlot (SA s ac)) = "$" ++ (show s) ++ "(" ++ (shortAccess ac) ++ ")"
     show (TokenConst c) = "#" ++ show c
 
+type Folder = (Slot -> Maybe ConstValue) -> Maybe [CoreLine ()]
+instance Show Folder where show _ = "(...)"
+
 data CoreLine t =
     CoreLine [CoreToken]
   | CoreAssign Slot Slot -- dest src
@@ -52,6 +56,7 @@ data CoreLine t =
 --
 -- strict to keep me from making it undefined and later wondering why debug
 -- shows cause crashes
+  | CoreFoldable Folder (CoreLine t)
   | CoreTargReader !Slot Slot (CoreBlock t)
   | CoreTargWriter Slot (CoreBlock t)
   | CoreTypeSwitch { ctsSlot :: Slot
@@ -76,6 +81,8 @@ instance Functor CoreLine where
         CoreTypeSwitch slot (fmap f n) (fmap f s) (fmap f o)
     fmap f (CoreLoop body ) =
         CoreLoop (fmap f body) 
+    fmap f (CoreFoldable folder body) =
+        CoreFoldable folder (fmap f body)
 
 showLine :: Show f => CoreLine f -> PrettyM ()
 showLine (CoreLine l) =
@@ -107,6 +114,7 @@ showLine (CoreTargReader ts slot body) = prefixFirst ("TARG ") $ do
 showLine (CoreTargWriter slot body) = prefixFirst ("TARG ") $ do
     emitLine $ "> " ++ (show slot)
     showBlock body
+showLine (CoreFoldable _ body) = prefixFirst ("FOLD ") $ showLine body
 --showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show $ fmap (const ()) x)
 
 showBlock :: Show f => CoreBlock f -> PrettyM ()
@@ -136,6 +144,9 @@ instance Functor CoreBlock where
     
 dumpCore :: Show t => Core t -> String
 dumpCore = runPretty . showBlock
+
+dumpCoreLine :: Show t => CoreLine t -> String
+dumpCoreLine = runPretty . showLine
 
 data GenAccess t = SA t AccessType
     deriving (Show, Ord, Eq, Data, Typeable)

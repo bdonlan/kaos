@@ -13,6 +13,7 @@ import Kaos.CoreFuture
 import Kaos.VirtRegister
 import Kaos.AST
 import Control.Monad.Reader
+import Kaos.Dump
 
 import qualified Data.Map as M
 
@@ -152,7 +153,7 @@ markLine l@(CoreLoop body) = do
 
 markLine l@(CoreCond cond ontrue_ onfalse_) = do
     trueFuture <- ask
-    future  <- setupFuture l trueFuture
+    future  <- setupFuture trueFuture
     ontrue  <- liftK $ (markBlockFuture future ontrue_)
     onfalse <- liftK $ (markBlockFuture future onfalse_)
     CoreLine cond' <- markLine (CoreLine cond)
@@ -164,17 +165,18 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
     s_f <- get
     let u1 = s_f `M.union` s_t
     let u2 = s_t `M.union` s_f
-    when (u1 /= u2) $ fail $ "Storage states diverged: " ++ show (l, s_t, s_f, future)
+    when (u1 /= u2) $ fail $ unlines["Storage states diverged:", dumpCoreLine (fmap (const()) l), dumpMap s_t, dumpMap s_f, dumpMap future]
     put u1
     return $ CoreCond cond' ontrue' onfalse'
     where
-        setupFuture :: CoreLine FutureS -> FutureS -> MarkM (M.Map Slot Lookahead)
-        setupFuture _ trueFuture = do
+        setupFuture :: FutureS -> MarkM (M.Map Slot Lookahead)
+        setupFuture trueFuture = do
             let acc = M.toList . getAM $ getLineAccess trueFuture
             let tf' = getFuture trueFuture
-            entries <- fmap concat $ mapM (flip setupEntry tf') acc
+            entries <- fmap concat $ mapM (setupEntry tf') acc
             return $ M.fromList entries
-        setupEntry (s, acc) future = setupEntry' (s, acc) (M.lookup s future)
+        setupEntry future (s, acc) = do
+            setupEntry' (s, acc) (M.lookup s future)
         -- need to bind read slots to ensure they aren't improperly aliased
 --        setupEntry' (slot, ReadAccess) _ = return []
         setupEntry' _ Nothing            = return [] -- if we don't use it, it can go wherever (XXX: is this safe wrt underlying regalloc?)
@@ -186,8 +188,11 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
                     newStorage slot future
                     Just (Private st) <- getStorage slot
                     return [(slot, Bound st)]
-                x -> fail $ "trying to bind a shared slot: " ++ show (x, acc, l)
+                x -> fail $ "trying to bind a shared slot: " ++ show (slot, x, acc, fmap (const ()) l)
         
+markLine (CoreFoldable folder body) = do
+    body' <- markLine body
+    return $ CoreFoldable folder body'
 
 markLine (CoreTargReader ts slot body) = do
     markLine (CoreAssign ts slot)

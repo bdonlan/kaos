@@ -69,7 +69,13 @@ markLine' (CoreCond condition ifTrue ifFalse) =
         condA  <- markLine' (CoreLine condition)
         trueA  <- blockAccess ifTrue
         falseA <- blockAccess ifFalse
-        return $ condA `mappend` trueA `mappend` falseA
+        let rv  = condA `mappend` (promoteWrites $ trueA `mappend` falseA)
+        return rv
+    where
+        promoteWrites (AM m) = AM $ M.fromList $ map promote $ M.toList m
+            where
+                promote (k, WriteAccess) = (k, MutateAccess)
+                promote p = p
 
 markLine' (CoreLoop body) = do
     body' <- markAccess body
@@ -82,6 +88,7 @@ markLine' (CoreLoop body) = do
         merge' Nothing      ReadAccess    = ReadAccess
         merge' Nothing      _             = WriteAccess
         merge' (Just Read)  ReadAccess    = ReadAccess
+    	merge' _            MutateAccess  = MutateAccess
         merge' x            y             = trace ("merge' fallback: " ++ show (x, y)) MutateAccess
 markLine' (CoreTargReader ts s body) = do
     bodyA <- blockAccess body
@@ -92,10 +99,13 @@ markLine' (CoreTargWriter s body) = do
 
 markLine' l@(CoreTypeSwitch _ _ _ _) = error $ "Late typeswitch: " ++ show l
 markLine' (CoreNote _) = return amEmpty
+markLine' (CoreFoldable _ l) = markLine' l
 
 baMergeAM :: AccessMap
           -> M.Map Slot AccessType
           -> M.Map Slot AccessType
+baMergeAM a b = getAM $ a `mappend` AM b
+{-
 -- XXX: can this be merged with Lookahead somehow?
 baMergeAM (AM a) b = M.unionWith mergeOne a b
     where
@@ -105,7 +115,7 @@ baMergeAM (AM a) b = M.unionWith mergeOne a b
         mergeOne WriteAccess _ = NoAccess
         mergeOne MutateAccess _ = MutateAccess
         mergeOne ReadAccess x = x
-
+-}
 mergeAM :: AccessMap
         -> AccessMap
         -> AccessMap

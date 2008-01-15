@@ -21,19 +21,7 @@ intersectTag :: AliasTag
              -> AliasTag
              -> AliasTag
              -> AliasTag
-intersectTag common t1 t2 = foldl checkKey t1 (AM.knownItems t1)
-    where
-        checkKey t item 
-            | not (checkKey' (AM.getGen item t1) (AM.getGen item t2))
-            = AM.remove item t
-            | otherwise
-            = t
-        checkKey' (Just g1) (Just g2)
-            | g1 >= (AM.nextGen common)
-            = False
-            | otherwise
-            = (g1 == g2)
-        checkKey' _ _ = False
+intersectTag = AM.mergeForUnchanged
 
 markBlock :: CoreBlock AccessMap -> AliasM (CoreBlock AliasTag)
 markBlock (CB ls) = liftM CB $ mapM (uncurry markLine) ls
