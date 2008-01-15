@@ -129,6 +129,7 @@ usesTarg core = worker `runCont` id
                   -> Cont Bool (CoreLine ())
         checkTarg ret (CoreTargReader _ _ _) = ret True
         checkTarg ret (CoreTargWriter _ _) = ret True
+        checkTarg ret (CoreNote (PrivateNote "targ access")) = ret True
         checkTarg _ t = return t
 
 expandForward :: Core AccessMap -> KaosM (Core AccessMap)
