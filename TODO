@@ -7,12 +7,9 @@ Near term:
 * Error/warning reporting
 * Better pretty-printing
 * Macros, root blocks - basic (CAOS model) structure for now
-  ETA: 2008-01-16
   * After this point, work can begin on the prelude
 * Inline rvalue expressions into slots via the const propagation system
-  ETA: 2008-01-18
 * LValues other than slots
-  ETA: 2008-01-20
 
 Long term:
 
