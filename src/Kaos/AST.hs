@@ -82,11 +82,12 @@ instance Show l => Show (Expression l) where
     show (EBoolCast c) = "bcast:" ++ (show c)
 
 data Statement l =
-    SExpr    (Expression l)
-  | SBlock   [Statement l] 
-  | SDoUntil Bool (BoolExpr l) (Statement l)
-  | SCond    (BoolExpr l) (Statement l) (Statement l)
-  | SICaos   [InlineCAOSLine l]
+    SExpr       (Expression l)
+  | SBlock      [Statement l] 
+  | SDoUntil    (BoolExpr l) (Statement l)
+  | SUntil      (BoolExpr l) (Statement l)
+  | SCond       (BoolExpr l) (Statement l) (Statement l)
+  | SICaos      [InlineCAOSLine l]
     deriving (Eq, Ord, Data, Typeable)
 
 data InlineCAOSLine l =

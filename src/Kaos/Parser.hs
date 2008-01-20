@@ -274,7 +274,7 @@ dostmt = do
     reserved "do"
     block <- fmap SBlock $ braces $ many statement
     cond <- whileP <|> untilP
-    return $ SDoUntil False cond block
+    return $ SDoUntil cond block
     where
         untilP = reserved "until" >> fmap BExpr expr
         whileP = reserved "while" >> fmap (BNot . BExpr) expr
@@ -284,7 +284,7 @@ whileuntil = do
     invert <- ( (reserved "while" >> return BNot) <|> (reserved "until" >> return id ))
     cond <- expr
     block <- fmap SBlock $ braces $ many statement
-    return $ SDoUntil True (invert $ BExpr cond) block
+    return $ SUntil (invert $ BExpr cond) block
 
 forloop :: Parser (Statement String)
 forloop = do
@@ -297,7 +297,7 @@ forloop = do
     incrE <- expr
     symbol ")"
     codeS <- fmap SBlock $ braces $ many statement
-    return $ SBlock [SExpr initE, SDoUntil True (BNot $ BExpr condE) (SBlock [codeS, SExpr incrE])]
+    return $ SBlock [SExpr initE, SUntil (BNot $ BExpr condE) (SBlock [codeS, SExpr incrE])]
 
 statement :: Parser (Statement String)
 statement = inlineCAOS
