@@ -297,7 +297,7 @@ forloop = do
     incrE <- expr
     symbol ")"
     codeS <- fmap SBlock $ braces $ many statement
-    return $ SBlock [SExpr initE, SDoUntil True (BExpr condE) (SBlock [codeS, SExpr incrE])]
+    return $ SBlock [SExpr initE, SDoUntil True (BNot $ BExpr condE) (SBlock [codeS, SExpr incrE])]
 
 statement :: Parser (Statement String)
 statement = inlineCAOS
