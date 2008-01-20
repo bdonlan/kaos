@@ -33,7 +33,7 @@ astToCore' (SCond be btrue bfalse) = do
     ctrue  <- captureBlock $ astToCore' btrue
     cfalse <- captureBlock $ astToCore' bfalse
     emit $ CoreCond cond ctrue cfalse
-astToCore' (SDoUntil cond stmt) = do
+astToCore' (SDoUntil False cond stmt) = do
     stmt' <- captureBlock $ do
         emit $ CoreLine [TokenLiteral "LOOP"]
         astToCore' stmt
@@ -41,6 +41,17 @@ astToCore' (SDoUntil cond stmt) = do
         emit $ CoreLine $ [TokenLiteral "UNTL"] ++ cond'
     emit $ CoreLoop stmt'
 
+astToCore' (SDoUntil True cond stmt) = do
+    slotTemp <- newSlot
+    slotTemp `typeIs` typeNum
+    emit $ CoreConst slotTemp (CInteger 1)
+
+    let ifWrap = SCond  (BCompare CEQ (ELexical slotTemp) (EConst $ CInteger 1))
+                        stmt
+                        (SExpr (EAssign (ELexical slotTemp) (EConst $ CInteger 1)))
+    let newLoop = SDoUntil False cond ifWrap
+    astToCore' newLoop
+   
 astToCore' (SICaos caosGroups) = do
     mapM_ emitILine caosGroups
 

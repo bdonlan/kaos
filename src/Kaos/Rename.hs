@@ -17,8 +17,8 @@ renameStatement (SBlock l)      = fmap SBlock $ mapM renameStatement l
 renameStatement (SExpr e)       = fmap SExpr  $ renameExpr e
 renameStatement (SCond c s1 s2) =
     liftM3 SCond (renameCond c) (renameStatement s1) (renameStatement s2)
-renameStatement (SDoUntil c s) =
-    liftM2 SDoUntil (renameCond c) (renameStatement s)
+renameStatement (SDoUntil b c s) =
+    liftM2 (SDoUntil b) (renameCond c) (renameStatement s)
 renameStatement (SICaos l) = fmap SICaos $ mapM renameILine l
 
 renameILine :: InlineCAOSLine String -> RenameT (InlineCAOSLine Slot)

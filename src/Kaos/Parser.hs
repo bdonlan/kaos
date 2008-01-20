@@ -174,7 +174,7 @@ lexer  = P.makeTokenParser
             -- types
             "numeric", "string", "agent", "any", "returning",
             -- everything else
-            "if", "else", "do", "until", "while", "_caos"]
+            "if", "else", "do", "until", "while", "for", "_caos"]
          , caseSensitive   = True
          , commentLine     = "#"
          })
@@ -274,16 +274,38 @@ dostmt = do
     reserved "do"
     block <- fmap SBlock $ braces $ many statement
     cond <- whileP <|> untilP
-    return $ SDoUntil cond block
+    return $ SDoUntil False cond block
     where
         untilP = reserved "until" >> fmap BExpr expr
         whileP = reserved "while" >> fmap (BNot . BExpr) expr
+
+whileuntil :: Parser (Statement String)
+whileuntil = do
+    invert <- ( (reserved "while" >> return BNot) <|> (reserved "until" >> return id ))
+    cond <- expr
+    block <- fmap SBlock $ braces $ many statement
+    return $ SDoUntil True (invert $ BExpr cond) block
+
+forloop :: Parser (Statement String)
+forloop = do
+    reserved "for"
+    symbol "("
+    initE <- expr
+    semi
+    condE <- expr
+    semi
+    incrE <- expr
+    symbol ")"
+    codeS <- fmap SBlock $ braces $ many statement
+    return $ SBlock [SExpr initE, SDoUntil True (BExpr condE) (SBlock [codeS, SExpr incrE])]
 
 statement :: Parser (Statement String)
 statement = inlineCAOS
         <|> exprstmt
         <|> ifstmt
         <|> dostmt
+        <|> whileuntil
+        <|> forloop
         <|> nullStatement
         <?> "statement"
 

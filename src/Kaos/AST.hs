@@ -84,7 +84,7 @@ instance Show l => Show (Expression l) where
 data Statement l =
     SExpr    (Expression l)
   | SBlock   [Statement l] 
-  | SDoUntil (BoolExpr l) (Statement l)
+  | SDoUntil Bool (BoolExpr l) (Statement l)
   | SCond    (BoolExpr l) (Statement l) (Statement l)
   | SICaos   [InlineCAOSLine l]
     deriving (Eq, Ord, Data, Typeable)
