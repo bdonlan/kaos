@@ -91,7 +91,7 @@ macroBlock = do
     return $ MacroBlock (Macro name args code)
 
 smallNatural :: forall i. (Integral i, Bounded i) => Parser i
-smallNatural = gen <?> desc
+smallNatural = try gen <?> desc
     where
         gen = do
             n <- natural
