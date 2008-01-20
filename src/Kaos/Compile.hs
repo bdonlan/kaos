@@ -43,21 +43,22 @@ compileCode = lift . compileCode'
 
 compileCode' :: Statement String -> KaosM String
 compileCode' parses =
-    runASTTransforms parses     >>=
-    renameLexicals              >>=
-    typecheck . astToCore       >>=
+    preRenameTransforms parses              >>=
+    renameLexicals                          >>=
+    postRenameTransforms                    >>=
+    typecheck . astToCore                   >>=
     dumpFlagged "dump-early-core" dumpCore  >>=
-    targExpand                  >>=
+    targExpand                              >>=
     dumpFlagged "dump-final-core" dumpCore  >>=
     unlessSet "no-folding" performFolding   >>=
     dumpFlagged "dump-folded-core" dumpCore >>=
-    markAccess                  >>=
+    markAccess                              >>=
     dumpFlagged "dump-access-core" dumpCore >>=
-    markFuture                  >>=
-    markStorage                 >>=
+    markFuture                              >>=
+    markStorage                             >>=
     dumpFlagged "dump-marked-core" dumpCore >>=
-    coreToVirt                  >>=
-    regAlloc                    >>=
+    coreToVirt                              >>=
+    regAlloc                                >>=
     return . emitCaos
 
 data CompileState = CS  { csInstallBuffer   :: S.Seq ByteString

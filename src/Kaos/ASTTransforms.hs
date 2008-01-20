@@ -1,13 +1,16 @@
 {-# OPTIONS_GHC -fno-monomorphism-restriction #-}
-module Kaos.ASTTransforms (runASTTransforms) where
+module Kaos.ASTTransforms (preRenameTransforms, postRenameTransforms) where
 
 -- Misc AST transforms
--- Prior to renaming for now
+
+import Control.Monad
+
+import Data.Generics
+import Data.Maybe
 
 import Kaos.AST
-import Data.Generics
 import Kaos.KaosM
-import Control.Monad
+import Kaos.Slot
 
 condDepth :: (Show t) => BoolExpr t -> Int
 condDepth (BCompare _ _ _) = 0
@@ -41,8 +44,8 @@ expandConds = everywhere (mkT expLocal)
             = BOr e1 (BExpr (EBoolCast e2))
         expLocal e = e
 
-runASTTransforms :: Statement String -> KaosM (Statement String)
-runASTTransforms =
+preRenameTransforms :: Statement String -> KaosM (Statement String)
+preRenameTransforms =
         check .
         expandCasts .
         expandConds .
@@ -94,4 +97,26 @@ foldNots = everywhere (mkT foldNot)
         invertC CNE = CEQ
         invertC CGT = CLE
         invertC CGE = CLT
+
+postRenameTransforms :: Statement Slot -> KaosM (Statement Slot)
+postRenameTransforms = flattenInst
+
+flattenInst :: Statement Slot -> KaosM (Statement Slot)
+flattenInst = return . scanInst
+    where
+        scanInst :: Data b => b -> b
+        scanInst t
+            | isNothing stmt 
+            = gmapT scanInst t
+            | otherwise
+            = extT id scanInst' t
+            where
+                stmt :: Maybe (Statement Slot)
+                stmt = cast t
+        scanInst' :: Statement Slot -> Statement Slot
+        scanInst' (SInstBlock s) = SInstBlock $ everywhere (mkT dropInst) s
+        scanInst' s = gmapT scanInst s
+        dropInst :: Statement Slot -> Statement Slot
+        dropInst (SInstBlock s) = s
+        dropInst s = s
 

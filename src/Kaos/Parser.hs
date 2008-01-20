@@ -174,7 +174,7 @@ lexer  = P.makeTokenParser
             -- types
             "numeric", "string", "agent", "any", "returning",
             -- everything else
-            "if", "else", "do", "until", "while", "for", "_caos"]
+            "if", "else", "do", "until", "while", "for", "_caos", "_inst"]
          , caseSensitive   = True
          , commentLine     = "#"
          })
@@ -299,12 +299,18 @@ forloop = do
     codeS <- fmap SBlock $ braces $ many statement
     return $ SBlock [SExpr initE, SUntil (BNot $ BExpr condE) (SBlock [codeS, SExpr incrE])]
 
+instblock :: Parser (Statement String)
+instblock = do
+    reserved "_inst"
+    liftM (SInstBlock . SBlock) $ braces $ many statement
+
 statement :: Parser (Statement String)
 statement = inlineCAOS
         <|> exprstmt
         <|> ifstmt
         <|> dostmt
         <|> whileuntil
+        <|> instblock
         <|> forloop
         <|> nullStatement
         <?> "statement"

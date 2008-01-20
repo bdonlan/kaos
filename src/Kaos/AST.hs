@@ -88,6 +88,7 @@ data Statement l =
   | SUntil      (BoolExpr l) (Statement l)
   | SCond       (BoolExpr l) (Statement l) (Statement l)
   | SICaos      [InlineCAOSLine l]
+  | SInstBlock  (Statement l)
     deriving (Eq, Ord, Data, Typeable)
 
 data InlineCAOSLine l =

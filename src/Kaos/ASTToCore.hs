@@ -54,6 +54,10 @@ astToCore' (SUntil cond stmt) = do
    
 astToCore' (SICaos caosGroups) = do
     mapM_ emitILine caosGroups
+astToCore' (SInstBlock stmt) = do
+    emit $ CoreLine [TokenLiteral "INST"]
+    astToCore' stmt
+    emit $ CoreLine [TokenLiteral "SLOW"]
 
 emitILine :: MonadKaos m => InlineCAOSLine Slot -> CoreWriter m ()
 emitILine (ICAssign v1 v2) = do

@@ -22,6 +22,7 @@ renameStatement (SDoUntil c s) =
 renameStatement (SUntil c s) =
     liftM2 SUntil (renameCond c) (renameStatement s)
 renameStatement (SICaos l) = fmap SICaos $ mapM renameILine l
+renameStatement (SInstBlock s) = liftM SInstBlock $ renameStatement s
 
 renameILine :: InlineCAOSLine String -> RenameT (InlineCAOSLine Slot)
 renameILine (ICAssign v1 v2) = liftM2 ICAssign (lex2slot v1) (lex2slot v2)
