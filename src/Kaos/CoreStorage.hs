@@ -135,17 +135,14 @@ markLine l@(CoreLoop body) = do
             acc <- asks getLineAccess
             let mut = map fst $ filter ((== MutateAccess) . snd) (M.toList $ getAM acc)
             mutF <- mapM fixReg mut
-            let future' = M.union (M.fromList mutF) trueFuture
+            let future' = foldl updReg trueFuture mutF
             return future'
+        updReg m (key, newVal) = M.alter (const newVal) key m
         fixReg slot = do
             stor <- getStorage slot
             case stor of
-                Just (Private r) -> return (slot, Bound r)
-                Nothing -> do
-                    future <- asksFuture (M.lookup slot)
-                    newStorage slot future
-                    Just (Private r) <- getStorage slot
-                    return (slot, Bound r)
+                Just (Private r) -> return (slot, Just $ Bound r)
+                Nothing -> return (slot, Nothing)
                 _ -> fail $ "Coreloop, bad fixreg storage " ++ show stor
         
 
