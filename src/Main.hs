@@ -25,11 +25,12 @@ import System.Exit
 import Control.Monad
 import Text.ParserCombinators.Parsec
 
-import Kaos.AST
-import Kaos.KaosM
+import Kaos.Toplevel
 
 import Kaos.Parser
 import Kaos.Compile
+
+import qualified Data.ByteString.Lazy.Char8 as LBS
 
 
 --import Debug.Trace
@@ -137,18 +138,24 @@ openSourceFile file = do
     h <- openFile file ReadMode
     return (file, h)
 
-runCompile :: [String] -> Statement String -> IO String
-runCompile flags = runKaosM flags . coreCompile
+openOutputFile :: String -> IO Handle
+openOutputFile "-" = return stdout
+openOutputFile file = openFile file WriteMode
 
 doCompile :: Settings -> IO ()
 doCompile s = do
     when ((length $ sourceFiles s) == 0) $ fail "No source files"
     sourceHandles <- mapM openSourceFile $ sourceFiles s
     parses <- mapM parseFile sourceHandles
-    let merged = head parses
-    putStrLn =<< runCompile (debugFlags s) merged
+    let merged = concat parses
+    result <- compile (debugFlags s) merged
+    case result of 
+        Nothing -> exitFailure
+        Just str -> do
+            h <- openOutputFile (outputFile s)
+            LBS.hPut h str
 
-parseFile :: (String, Handle) -> IO (Statement String)
+parseFile :: (String, Handle) -> IO (KaosSource)
 parseFile (name, handle) = do
     contents <- hGetContents handle
     let result = runParser parser () name contents

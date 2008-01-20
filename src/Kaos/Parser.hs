@@ -24,12 +24,103 @@ import qualified Text.ParserCombinators.Parsec.Token as P
 --import qualified Text.ParserCombinators.Parsec.Pos as Pos
 import Text.ParserCombinators.Parsec.Language
 import Text.ParserCombinators.Parsec.Expr
-import Monad (liftM)
+
+import Control.Monad
+import Data.Maybe
 import Kaos.AST
 --import Debug.Trace
 import Kaos.Emit (emitConst)
 import Kaos.Core (mergeAccess)
 -- TODO: move mergeAccess to AST
+import Kaos.Toplevel
+
+typeName :: Parser CAOSType
+typeName = (reserved "agent"    >> return typeObj)
+        <|>(reserved "numeric"  >> return typeNum)
+        <|>(reserved "string"   >> return typeStr)
+        <|>(reserved "any"      >> return typeAny)
+
+root :: Parser KaosSource
+root =  many1 kaosUnit
+    <|> simpleScript
+
+simpleScript :: Parser KaosSource
+simpleScript = liftM (\x -> [InstallScript x]) bareBlock
+
+kaosUnit :: Parser KaosUnit
+kaosUnit =  (installScript <?> "install script")
+        <|> (removeScript  <?> "removal script")
+        <|> (macroBlock    <?> "macro definition")
+        <|> (agentScript   <?> "normal script")
+
+installScript :: Parser KaosUnit
+installScript = reserved "install" >> liftM InstallScript (braces bareBlock)
+
+removeScript :: Parser KaosUnit
+removeScript  = reserved "remove" >> liftM RemoveScript (braces bareBlock)
+
+macroArg :: Parser MacroArg
+macroArg = do
+    name <- identifier
+    (typ, output) <- option (typeAny, False) argTypeNote
+    defaultval <- option Nothing argDefaultNote
+    return $ MacroArg name typ output defaultval
+
+argTypeNote :: Parser (CAOSType, Bool)
+argTypeNote = do
+    reservedOp "::"
+    output <- option False (symbol "returning" >> return True)
+    typ <- option typeAny typeName
+    return $ (typ, output)
+
+argDefaultNote :: Parser (Maybe ConstValue)
+argDefaultNote = do
+    reservedOp "="
+    liftM Just constVal
+
+macroBlock :: Parser KaosUnit
+macroBlock = do
+    reserved "define"
+    name <- identifier
+    args <- parens (commaSep macroArg)
+    when (([] /=)
+         .filter (isNothing . maDefault)
+         .dropWhile (isNothing . maDefault)
+         $ args) $ fail "All default macro arguments must be at the end of the argument list"
+    code <- braces bareBlock
+    return $ MacroBlock (Macro name args code)
+
+smallNatural :: forall i. (Integral i, Bounded i) => Parser i
+smallNatural = gen <?> desc
+    where
+        gen = do
+            n <- natural
+            when (n < minI || n > maxI) $ fail ("Value " ++ (show n) ++ " is out of range")
+            let v = (fromInteger n) :: i
+            return v
+        minN :: i
+        minN = minBound
+        minI = toInteger minN
+        maxN :: i
+        maxN = maxBound
+        maxI = toInteger maxN
+        desc = "integer (" ++ (show minN) ++ ".." ++ (show maxN) ++ ")"
+
+agentScript :: Parser KaosUnit
+agentScript = do
+    reserved "script"
+    symbol "("
+    fmly <- smallNatural
+    symbol ","
+    gnus <- smallNatural
+    symbol ","
+    spcs <- smallNatural
+    symbol ","
+    scrp <- smallNatural
+    symbol ")"
+    code <- braces bareBlock
+    return $ AgentScript fmly gnus spcs scrp code
+    
 
 whiteSpace :: Parser ()
 whiteSpace= P.whiteSpace lexer
@@ -73,15 +164,17 @@ lexer :: P.TokenParser ()
 lexer  = P.makeTokenParser 
          (emptyDef
          { reservedOpNames = ["*","/","+","-",
-                              ",",
+                              ",","::",
                               ">","<",">=","<=","!=","==",
                               "!",".","=","[","]",".",
                               "*=", "/=", "+=", "-="]
-         , reservedNames   = ["install","number","if","else","elsif",
-                              "do", "until", "while", "forever", "enum",
-                              "esee", "etch", "remove", "agent", "script",
-                              "string", "atomic", "lock", "inst", "object",
-                              "define", "let", "_caos"]
+         , reservedNames   = [
+            -- toplevel
+            "install", "remove", "script", "define",
+            -- types
+            "numeric", "string", "agent", "any", "returning",
+            -- everything else
+            "if", "else", "do", "until", "while", "_caos"]
          , caseSensitive   = True
          , commentLine     = "#"
          })
@@ -194,21 +287,18 @@ statement = inlineCAOS
         <|> nullStatement
         <?> "statement"
 
-root :: Parser (Statement String)
-root = simpleScript
-
 nullStatement :: Parser (Statement String)
 nullStatement = do
     semi
     return (SBlock [])
 
-simpleScript :: Parser (Statement String)
-simpleScript = do
+bareBlock :: Parser (Statement String)
+bareBlock = do
     s <- many statement
     return $ SBlock s
     <?> "bare script"
 
-parser :: Parser (Statement String)
+parser :: Parser KaosSource
 parser = whiteSpace >> root >>> eof
 
 
@@ -231,7 +321,7 @@ caosPragma = do
 
 caosAssign :: Parser (InlineCAOSLine String)
 caosAssign = do
-        reserved "let"
+        symbol "let"
         v1 <- caosVarName
         symbol "="
         try (finishConst v1) <|> (finishVar v1)
@@ -245,7 +335,7 @@ caosAssign = do
 
 caosTarg :: Parser (InlineCAOSLine String)
 caosTarg = do
-    reserved "targ"
+    symbol "targ"
     dir <- lexeme $ liftM (:"") (oneOf "<>")
     let op = mapOp dir
     v <- caosVarName
