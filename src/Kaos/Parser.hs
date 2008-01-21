@@ -69,9 +69,9 @@ macroArg = do
 argTypeNote :: Parser (CAOSType, Bool)
 argTypeNote = do
     reservedOp "::"
-    output <- option False (symbol "returning" >> return True)
+--    output <- option False (symbol "returning" >> return True)
     typ <- option typeAny typeName
-    return $ (typ, output)
+    return $ (typ, False)
 
 argDefaultNote :: Parser (Maybe ConstValue)
 argDefaultNote = do
@@ -150,9 +150,11 @@ braces    = P.braces lexer
 a >>> b = do { r <- a; b; return r }
 
 manySep :: Parser t -> Parser dummy -> Parser [t]
-manySep m sep = do
+manySep m sep = (try $ manySep' m sep) <|> return []
+manySep' :: Parser t -> Parser dummy -> Parser [t]
+manySep' m sep = do
     v <- m
-    (try (do {sep; l <- manySep m sep; return $ v:l}) <|> return [v])
+    (try (do {sep; l <- manySep' m sep; return $ v:l}) <|> return [v])
 
 commaSep :: Parser t -> Parser [t]
 commaSep m = manySep m $ symbol ","

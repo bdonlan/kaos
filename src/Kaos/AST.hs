@@ -70,6 +70,7 @@ data Expression l =
   | ELexical l
   | EAssign (Expression l) (Expression l)
   | ECall String [Expression l]
+  | EStmt (Maybe l) (Statement l)
   | EBoolCast (BoolExpr l)
   deriving (Eq, Ord, Data, Typeable)
 
@@ -80,6 +81,7 @@ instance Show l => Show (Expression l) where
     show (EAssign e1 e2) = "assign:" ++ show (e1, e2)
     show (ECall s e) = "call:" ++ s ++ show e
     show (EBoolCast c) = "bcast:" ++ (show c)
+    show (EStmt l s) = "stmt:" ++ (show l) ++ ":" ++ show s
 
 data Statement l =
     SExpr       (Expression l)

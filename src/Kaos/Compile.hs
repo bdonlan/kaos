@@ -39,12 +39,14 @@ unlessSet flag f v = do
         else f v
 
 compileCode :: Statement String -> CompileM String
-compileCode = lift . compileCode'
+compileCode code = do
+    st <- get
+    lift $ compileCode' (flip M.lookup $ csDefinedMacros st) code
 
-compileCode' :: Statement String -> KaosM String
-compileCode' parses =
+compileCode' :: MacroContext -> Statement String -> KaosM String
+compileCode' ctx parses =
     preRenameTransforms parses              >>=
-    renameLexicals                          >>=
+    renameLexicals ctx                      >>=
     postRenameTransforms                    >>=
     typecheck . astToCore                   >>=
     dumpFlagged "dump-early-core" dumpCore  >>=
@@ -92,7 +94,7 @@ compileUnit (AgentScript fmly gnus spcs scrp code) = do
     emitScript "ENDM\n"
 compileUnit (MacroBlock macro) = do
     s <- get
-    let inCtx = macro $ csDefinedMacros s
+    let inCtx = macro $ flip M.lookup (csDefinedMacros s)
     put $ s { csDefinedMacros = M.insert (mbName inCtx) inCtx (csDefinedMacros s) }
 
 prepSeq :: CompileState -> S.Seq ByteString

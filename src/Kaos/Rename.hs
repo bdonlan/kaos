@@ -1,16 +1,21 @@
 module Kaos.Rename (renameLexicals) where
 
 import Control.Monad.State
+import Control.Monad.Reader
+import qualified Data.Map as M
+import Data.Maybe
+
 import Kaos.AST
 import Kaos.Slot
-import qualified Data.Map as M
+import Kaos.Toplevel
 
 import Kaos.KaosM
 
-type RenameT = StateT (M.Map String Slot) KaosM
+type RenameT = StateT (M.Map String Slot) (ReaderT MacroContext KaosM)
 
-renameLexicals :: Statement String -> KaosM (Statement Slot)
-renameLexicals = flip evalStateT M.empty . renameStatement
+renameLexicals :: MacroContext -> Statement String -> KaosM (Statement Slot)
+renameLexicals ctx st =
+    runReaderT (evalStateT (renameStatement st) M.empty) ctx
 
 renameStatement :: Statement String -> RenameT (Statement Slot)
 renameStatement (SBlock l)      = fmap SBlock $ mapM renameStatement l
@@ -47,9 +52,48 @@ renameExpr (EBinaryOp s e1 e2) =
     liftM2 (EBinaryOp s) (renameExpr e1) (renameExpr e2)
 renameExpr (EAssign e1 e2) =
     liftM2 EAssign (renameExpr e1) (renameExpr e2)
-renameExpr (ECall s e) = fmap (ECall s) $ mapM renameExpr e
 renameExpr (ELexical l) = fmap ELexical $ lex2slot l
 renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
+
+--renameExpr (ECall s e) = fmap (ECall s) $ mapM renameExpr e
+renameExpr (ECall name e) = do
+    macroM <- asks ($name)
+    macro <- case macroM of
+        Nothing -> fail $ "Unknown macro name \"" ++ name ++ "\""
+        Just  m -> return m
+    instd <- mapM instExpr e
+    let expSlots = map fst instd
+    let oprefix  = map snd instd
+    (iprefix, newMap) <- instantiateVars [] M.empty (mbArgs macro) expSlots
+    oldMap <- get
+    put $ newMap
+    inner <- local (const $ mbContext macro) $ renameStatement $ (SBlock $ iprefix ++ [mbCode macro])
+    newMap' <- get
+    put oldMap
+    return $ EStmt (M.lookup "_return" newMap') (SBlock (oprefix ++ [inner]))
+    where
+        instExpr :: Expression String -> RenameT (Slot, Statement Slot)
+        instExpr expr = do
+            slot <- newSlot
+            rexpr <- renameExpr expr
+            return (slot, SExpr $ EAssign (ELexical slot) rexpr)
+        instantiateVars prefix argMap [] [] = return (prefix, argMap)
+        instantiateVars _ _ [] (_:_) = fail $ "Too many args for macro '" ++ name ++ "'"
+        instantiateVars prefix argMap (harg:args) []
+            | isJust $ maDefault harg
+            = instantiateVars (constSetter:prefix) argMap args []
+            | otherwise
+            = fail $ "Too few args for macro '" ++ name ++ "'"
+            where
+                constSetter = SExpr (EAssign (ELexical (maName harg)) (EConst (fromJust $ maDefault harg)))
+        instantiateVars prefix argMap (harg:args) (hexp:exps) = do
+            instantiateVars prefix (M.insert (maName harg) hexp argMap) args exps
+
+renameExpr (EStmt result code) = liftM2 EStmt (liftMaybe lex2slot result) (renameStatement code)
+
+liftMaybe :: Monad m => (a -> m b) -> Maybe a -> m (Maybe b)
+liftMaybe _ Nothing  = return Nothing
+liftMaybe f (Just v) = liftM Just $ f v 
 
 lex2slot :: String -> RenameT Slot
 lex2slot l = do

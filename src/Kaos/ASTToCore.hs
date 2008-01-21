@@ -210,5 +210,13 @@ expToCore (EBoolCast c) = do
         [ TokenLiteral "endi" ]
     return s
 
-expToCore e = error $ "ICE: can't expToCore: " ++ show e
+expToCore (EStmt slot code) = do
+    astToCore' code
+    case slot of
+        Just s  -> return s
+        Nothing -> do
+            s <- newSlot
+            s `typeIs` typeVoid
+            return s
 
+expToCore (ECall _ _) = fail "Late ECall"

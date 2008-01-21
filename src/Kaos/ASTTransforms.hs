@@ -99,7 +99,14 @@ foldNots = everywhere (mkT foldNot)
         invertC CGE = CLT
 
 postRenameTransforms :: Statement Slot -> KaosM (Statement Slot)
-postRenameTransforms = flattenInst
+postRenameTransforms code = flattenInst =<< flattenSExpr code
+
+flattenSExpr :: Statement Slot -> KaosM (Statement Slot)
+flattenSExpr = return . everywhere (mkT flatten)
+    where
+        flatten :: Statement Slot -> Statement Slot
+        flatten (SExpr (EStmt _ s)) = s
+        flatten s = s
 
 flattenInst :: Statement Slot -> KaosM (Statement Slot)
 flattenInst = return . scanInst

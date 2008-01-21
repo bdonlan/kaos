@@ -9,7 +9,6 @@ module Kaos.Toplevel (
     Data.Word.Word16,
 ) where
 
-import qualified Data.Map as M
 import Data.Word (Word8, Word16)
 
 import Kaos.AST
@@ -26,12 +25,15 @@ data Macro = Macro  { mbName    :: String
                     , mbCode    :: Statement String
                     , mbContext :: MacroContext
                     }
-                    deriving (Show)
-type MacroContext = M.Map String Macro
+
+instance Show Macro where
+    show (Macro n a c _) = "Macro { mbName = " ++ (show n) ++ ", mbArgs = " ++ (show a) ++ ", mbCode = " ++ (show c) ++ " }"
+
+type MacroContext = String -> Maybe Macro
 
 type FreeMacro = MacroContext -> Macro
 instance Show FreeMacro where
-    show f = show $ f M.empty
+    show f = show $ f undefined
 
 data KaosUnit = InstallScript (Statement String)
               | MacroBlock  FreeMacro
