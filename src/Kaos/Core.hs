@@ -136,7 +136,7 @@ coreNormalize :: Core t -> Core t
 coreNormalize (CB l) = CB $ map (first lineNormalize) l
 
 newtype CoreBlock t = CB { unCB :: [(CoreLine t, t)] }
-    deriving (Show, Eq, Ord, Data, Typeable)
+    deriving (Show, Data, Typeable)
 type Core t = CoreBlock t
 
 instance Functor CoreBlock where
