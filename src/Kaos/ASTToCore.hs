@@ -214,16 +214,6 @@ expToCore (ECall "print" (x:xs)) = do
             = return "outs"
             | otherwise
             = fail "Bad type for print"
-expToCore (ECall "sqrt" [e]) = do
-    s <- expToCore e
-    result <- newSlot (slotType s)
-    result `typeIs` typeNum
-    emit $ CoreLine [ TokenLiteral "setv"
-                    , TokenSlot (SA result WriteAccess)
-                    , TokenLiteral "sqrt"
-                    , TokenSlot (SA s ReadAccess)
-                    ]
-    return result
 expToCore (ECall "__touch" [e]) = do
     s <- expToCore e
     emit $ CoreTouch (SA s MutateAccess)
