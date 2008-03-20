@@ -74,15 +74,21 @@ argDefaultNote = do
     liftM Just constVal
 
 macroType :: Parser MacroType
-macroType = (symbol "lvalue" >> return MacroLValue)
-        <|> (symbol "iterator" >> return MacroIterator)
+macroType = (try (symbol "set") >> return MacroLValue)
+        <|> (try (symbol "iterator") >> return MacroIterator)
         <|> (return MacroRValue)
+
+macroTypePrefix :: MacroType -> String -> String
+macroTypePrefix MacroLValue s = "set:" ++ s
+macroTypePrefix MacroIterator s = "iter:" ++ s
+macroTypePrefix MacroRValue s = s
+
 
 macroBlock :: Parser KaosUnit
 macroBlock = do
     reserved "define"
     mtyp <- macroType
-    name <- identifier
+    name <- liftM (macroTypePrefix mtyp) identifier
     args <- parens (commaSep macroArg)
     when (([] /=)
          .filter (isNothing . maDefault)
