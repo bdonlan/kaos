@@ -29,6 +29,7 @@ import Kaos.Toplevel
 
 import Kaos.Parser
 import Kaos.Compile
+import Kaos.Prelude
 
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
@@ -145,9 +146,10 @@ openOutputFile file = openFile file WriteMode
 doCompile :: Settings -> IO ()
 doCompile s = do
     when ((length $ sourceFiles s) == 0) $ fail "No source files"
+    prelude <- parseString "(internal prelude)" preludeStr
     sourceHandles <- mapM openSourceFile $ sourceFiles s
     parses <- mapM parseFile sourceHandles
-    let merged = concat parses
+    let merged = concat (prelude:parses)
     result <- compile (debugFlags s) merged
     case result of 
         Nothing -> exitFailure
@@ -158,6 +160,10 @@ doCompile s = do
 parseFile :: (String, Handle) -> IO (KaosSource)
 parseFile (name, handle) = do
     contents <- hGetContents handle
+    parseString name contents
+
+parseString :: String -> String -> IO KaosSource
+parseString name contents = do
     let result = runParser parser () name contents
     case result of
         Right x -> return x
