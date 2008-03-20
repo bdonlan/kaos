@@ -1,7 +1,5 @@
 Near term:
 
-* Propagate constant strings
-  ETA: soon?
 * Final regalloc stage STUBBED
   on hold until it becomes a problem
 * Error/warning reporting
