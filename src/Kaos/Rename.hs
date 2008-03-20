@@ -63,8 +63,9 @@ renameExpr :: (Expression String) -> RenameT (Expression Slot)
 renameExpr (EConst c) = return $ EConst c
 renameExpr (EBinaryOp s e1 e2) =
     liftM2 (EBinaryOp s) (renameExpr e1) (renameExpr e2)
-renameExpr (EAssign e1 e2) =
+renameExpr (EAssign e1@(ELexical _) e2) =
     liftM2 EAssign (renameExpr e1) (renameExpr e2)
+renameExpr (EAssign e _) = fail $ "Not an LValue: " ++ (show e)
 renameExpr (ELexical l) = fmap ELexical $ lex2slot l
 renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
 
