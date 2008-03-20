@@ -133,33 +133,32 @@ main = do
             then putStrLn versionStr
             else doCompile s'
 
-openSourceFile :: String -> IO (String, Handle)
-openSourceFile "-" = return ("(stdin)", stdin)
-openSourceFile file = do
-    h <- openFile file ReadMode
-    return (file, h)
+readSourceFile :: String -> IO (String, String)
+readSourceFile "-" = do
+    s <- hGetContents stdin
+    return ("(stdin)", s)
+readSourceFile fn = do
+    s <- readFile fn
+    return (fn, s)
 
-openOutputFile :: String -> IO Handle
-openOutputFile "-" = return stdout
-openOutputFile file = openFile file WriteMode
+withOutputFile :: String -> (Handle -> IO a) -> IO a
+withOutputFile "-" m = m stdout
+withOutputFile file m = withFile file WriteMode m
 
 doCompile :: Settings -> IO ()
 doCompile s = do
     when ((length $ sourceFiles s) == 0) $ fail "No source files"
     prelude <- parseString "(internal prelude)" preludeStr
-    sourceHandles <- mapM openSourceFile $ sourceFiles s
-    parses <- mapM parseFile sourceHandles
+    parses <- mapM parseFile (sourceFiles s)
     let merged = concat (prelude:parses)
     result <- compile (debugFlags s) merged
     case result of 
         Nothing -> exitFailure
-        Just str -> do
-            h <- openOutputFile (outputFile s)
-            LBS.hPut h str
+        Just str -> withOutputFile (outputFile s) (\h -> LBS.hPut h str)
 
-parseFile :: (String, Handle) -> IO (KaosSource)
-parseFile (name, handle) = do
-    contents <- hGetContents handle
+parseFile :: String -> IO (KaosSource)
+parseFile fn = do
+    (name, contents) <- readSourceFile fn
     parseString name contents
 
 parseString :: String -> String -> IO KaosSource
