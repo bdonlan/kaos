@@ -39,6 +39,26 @@ renameStatement (SUntil c s) =
     liftM2 SUntil (renameCond c) (renameStatement s)
 renameStatement (SICaos l) = fmap SICaos $ mapM renameILine l
 renameStatement (SInstBlock s) = liftM SInstBlock $ renameStatement s
+renameStatement (SIterCall name args block) = do
+    macroM <- asks ($("iter:" ++ name))
+    case macroM of
+        Nothing -> fail ("Unknown iterator macro " ++ name)
+        Just m  -> do
+            lexCtx <- get
+            macroCtx <- ask
+            let ymacro = defaultMacro   { mbName = "_yield"
+                                        , mbType = MacroLValue
+                                        , mbArgs = []
+                                        , mbCode = block
+                                        , mbRetType = typeVoid
+                                        , mbLexVars = lexCtx
+                                        , mbContext = macroCtx
+                                        }
+            let mmacro = m  { mbContext = (\n -> if (n == "_yield")
+                                                   then Just ymacro
+                                                   else mbContext m n )
+                            }
+            fmap SExpr $ renameMacro mmacro args
 
 renameILine :: InlineCAOSLine String -> RenameT (InlineCAOSLine Slot)
 renameILine (ICAssign v1 v2) = liftM2 ICAssign (lex2slot v1) (lex2slot v2)
@@ -72,26 +92,30 @@ renameExpr (ELexical l) = fmap ELexical $ lex2slot l
 renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
 
 --renameExpr (ECall s e) = fmap (ECall s) $ mapM renameExpr e
-renameExpr (ECall name e) = flip runContT return $ callCC $ \cc -> do
+renameExpr (ECall name e) = do
     macroM <- asks ($name)
-    macro <- case macroM of
-        Nothing -> do -- pass it down to ASTToCore in case it's a builtin
-            e' <- lift $ mapM renameExpr e
-            cc $ ECall name e'
-        Just  m -> return m
-    lift $ do
-        instd <- mapM (uncurry instExpr) (zip e $ map maType (mbArgs macro))
-        let expSlots = map fst instd
-        let oprefix  = map snd instd
-        (iprefix, newMap) <- instantiateVars [] M.empty (mbArgs macro) expSlots
-        oldMap <- get
-        put $ newMap
-        registerVar (mbRetType macro) "_return"
-        inner <- local (const $ mbContext macro) $ renameStatement $ (SBlock $ iprefix ++ [mbCode macro])
-        newMap' <- get
-        put oldMap
-        return $ EStmt (M.lookup "_return" newMap') (SBlock (oprefix ++ [inner]))
+    case macroM of
+        Nothing -> do
+            e' <- mapM renameExpr e
+            return $ ECall name e'
+        Just  m -> renameMacro m e
+renameExpr (EStmt result code) = liftM2 EStmt (liftMaybe lex2slot result) (renameStatement code)
+
+renameMacro :: Macro -> [Expression String] -> RenameT (Expression Slot)
+renameMacro macro e = do
+    instd <- mapM (uncurry instExpr) (zip e $ map maType (mbArgs macro))
+    let expSlots = map fst instd
+    let oprefix  = map snd instd
+    (iprefix, newMap) <- instantiateVars [] M.empty (mbArgs macro) expSlots
+    oldMap <- get
+    put $ newMap
+    registerVar (mbRetType macro) "_return"
+    inner <- local (const $ mbContext macro) $ renameStatement $ (SBlock $ iprefix ++ [mbCode macro])
+    newMap' <- get
+    put oldMap
+    return $ EStmt (M.lookup "_return" newMap') (SBlock (oprefix ++ [inner]))
     where
+        name = mbName macro
         instExpr    :: Expression String
                     -> CAOSType
                     -> RenameT (Slot, Statement Slot)
@@ -111,7 +135,7 @@ renameExpr (ECall name e) = flip runContT return $ callCC $ \cc -> do
         instantiateVars prefix argMap (harg:args) (hexp:exps) = do
             instantiateVars prefix (M.insert (maName harg) hexp argMap) args exps
 
-renameExpr (EStmt result code) = liftM2 EStmt (liftMaybe lex2slot result) (renameStatement code)
+
 
 liftMaybe :: Monad m => (a -> m b) -> Maybe a -> m (Maybe b)
 liftMaybe _ Nothing  = return Nothing

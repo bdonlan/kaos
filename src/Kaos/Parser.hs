@@ -321,6 +321,12 @@ instblock = do
     reserved "_inst"
     liftM (SInstBlock . SBlock) $ braces $ many statement
 
+iterCall :: Parser (Statement String)
+iterCall = try $ do
+    (ECall name args) <- funcCall
+    block <- fmap SBlock (braces $ many statement)
+    return $ SIterCall name args block
+
 declaration :: Parser (Statement String)
 declaration = do
     t <- typeName
@@ -336,6 +342,7 @@ declaration = do
 statement :: Parser (Statement String)
 statement = inlineCAOS
         <|> declaration
+        <|> iterCall
         <|> exprstmt
         <|> ifstmt
         <|> dostmt
