@@ -35,3 +35,53 @@ define set norn(agent norn) {
   _caos { NORN $norn(r); }
 }
 
+define newsimple(numeric family, numeric genus, numeric species, string spritefile, numeric firstframe, numeric noframes, numeric plane) returning agent {
+        _caos {
+                .targ > $_return {
+                        NEW: SIMP $family(r) $genus(r) $species(r) $spritefile(r) $firstframe(r) $noframes(r) $plane(r);
+                };
+        }
+}
+
+# need better folder :(
+define attributes(agent a) returning numeric {
+        _caos {
+                .targ < $a {
+                        SETV $_return(w) ATTR;
+                };
+        };
+}
+
+define set attributes(numeric attr, agent a) {
+        _caos {
+                .targ < $a {
+                        ATTR $attr(r);
+                };
+        };
+}
+
+define move(agent a, numeric x, numeric y) {
+        _caos {
+                .targ < $a {
+                        MVTO $x(r) $y(r);
+                };
+        };
+}
+
+define set dcor(numeric display, agent a) {
+        _caos {
+                .targ < $a {
+                        DCOR $display(r);
+                };
+        };
+}
+
+define set perm(numeric value, agent a) {
+        _caos {
+                .targ < $a {
+                        PERM $value(r);
+                };
+        };
+}
+
+
