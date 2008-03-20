@@ -3,11 +3,11 @@ Version:        0.01
 License:        GPL
 License-File:   COPYING
 Author:         Bryan Donlan
-Build-Depends:  base, mtl, haskell98, parsec
+Build-Depends:  base, mtl, haskell98, parsec, bytestring, containers
 Synopsis:       Kaos Compiler
 
 Executable:     kaos
 Main-Is:        Main.hs
 Hs-Source-Dirs: src
 ghc-options:    -Wall -Werror
-extensions:     MultiParamTypeClasses, UndecidableInstances, GeneralizedNewtypeDeriving, BangPatterns
+extensions:     MultiParamTypeClasses, UndecidableInstances, GeneralizedNewtypeDeriving, BangPatterns, DeriveDataTypeable, TypeSynonymInstances, ScopedTypeVariables, FunctionalDependencies, FlexibleInstances, FlexibleContexts, RelaxedPolyRec
