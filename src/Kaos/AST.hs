@@ -1,5 +1,3 @@
-{-# OPTIONS -fglasgow-exts #-}
-
 {-
     Kaos - Kaos compiler
     Copyright (C) 2005  Bryan Donlan
