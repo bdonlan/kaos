@@ -18,3 +18,20 @@ define iterator(agent) enum(numeric family, numeric genus, numeric species) {
 define unid(agent a) returning numeric {
   _caos { .targ < $a { SETV $_return(w) UNID; }; };
 }
+
+define iterator() reps(numeric n) {
+  _caos {
+    REPS $n(r);
+    .loop { .kaos { _yield(); }; };
+    REPE;
+  };
+}
+
+define norn() returning agent {
+  _caos { SETA $_return(w) NORN; };
+}
+
+define set norn(agent norn) {
+  _caos { NORN $norn(r); }
+}
+
