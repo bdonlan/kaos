@@ -46,16 +46,21 @@ renameStatement (SUntil c s) =
     liftM2 SUntil (renameCond c) (renameStatement s)
 renameStatement (SICaos l) = fmap SICaos $ mapM renameILine l
 renameStatement (SInstBlock s) = liftM SInstBlock $ renameStatement s
-renameStatement (SIterCall name args block) = do
+renameStatement (SIterCall name args argNames block) = do
     macroM <- asks ($("iter:" ++ name))
     case macroM of
         Nothing -> fail ("Unknown iterator macro " ++ name)
         Just m  -> do
+            when ( (length argNames) /= (length $ miArgTypes $ mbType m)) $
+                fail "Iteree block has the wrong number of arguments"
             lexCtx <- get
             macroCtx <- ask
+            let innerArgs = zipWith (\argN typ -> MacroArg argN typ Nothing)
+                                    argNames
+                                    (miArgTypes $ mbType m)
             let ymacro = defaultMacro   { mbName = "_yield"
                                         , mbType = MacroLValue
-                                        , mbArgs = []
+                                        , mbArgs = innerArgs
                                         , mbCode = block
                                         , mbRetType = typeVoid
                                         , mbLexVars = lexCtx

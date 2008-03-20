@@ -68,7 +68,7 @@ astToCore' (SInstBlock stmt) = do
     emit $ CoreLine [TokenLiteral "INST"]
     astToCore' stmt
     emit $ CoreLine [TokenLiteral "SLOW"]
-astToCore' (SIterCall _ _ _) = fail "late SIterCall"
+astToCore' (SIterCall _ _ _ _) = fail "late SIterCall"
 
 
 emitILine :: MonadKaos m => InlineCAOSLine Slot -> CoreWriter m ()

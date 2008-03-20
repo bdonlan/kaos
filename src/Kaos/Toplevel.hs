@@ -18,14 +18,13 @@ import qualified Data.Map as M
 
 data MacroArg = MacroArg    { maName    :: String
                             , maType    :: CAOSType
-                            , maOutput  :: Bool
                             , maDefault :: Maybe ConstValue
                             }
                             deriving (Show, Eq, Ord)
 
 data MacroType  = MacroRValue
                 | MacroLValue
-                | MacroIterator
+                | MacroIterator { miArgTypes :: [CAOSType] }
                 deriving (Show, Eq, Ord)
 
 data Macro = Macro  { mbName    :: String

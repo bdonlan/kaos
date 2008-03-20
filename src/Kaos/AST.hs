@@ -91,7 +91,7 @@ data Statement l =
   | SICaos      [InlineCAOSLine l]
   | SInstBlock  (Statement l)
   | SDeclare    CAOSType [(l, (Maybe (Expression l)))]
-  | SIterCall   String [Expression l] (Statement l)
+  | SIterCall   String [Expression l] [String] (Statement l)
     deriving (Eq, Ord, Data, Typeable)
 
 data InlineCAOSLine l =

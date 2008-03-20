@@ -62,11 +62,10 @@ removeScript  = reserved "remove" >> liftM RemoveScript (braces bareBlock)
 
 macroArg :: Parser MacroArg
 macroArg = do
-    let output = False -- XXX
     typ  <- typeName
     name <- identifier
     defaultval <- option Nothing argDefaultNote
-    return $ MacroArg name typ output defaultval
+    return $ MacroArg name typ defaultval
 
 argDefaultNote :: Parser (Maybe ConstValue)
 argDefaultNote = do
@@ -75,12 +74,16 @@ argDefaultNote = do
 
 macroType :: Parser MacroType
 macroType = (try (symbol "set") >> return MacroLValue)
-        <|> (try (symbol "iterator") >> return MacroIterator)
+        <|> (try (symbol "iterator") >> macroIterator)
         <|> (return MacroRValue)
+    where
+        macroIterator = do
+            args <- parens $ commaSep typeName
+            return $ MacroIterator args
 
 macroTypePrefix :: MacroType -> String -> String
 macroTypePrefix MacroLValue s = "set:" ++ s
-macroTypePrefix MacroIterator s = "iter:" ++ s
+macroTypePrefix (MacroIterator _) s = "iter:" ++ s
 macroTypePrefix MacroRValue s = s
 
 
@@ -324,8 +327,18 @@ instblock = do
 iterCall :: Parser (Statement String)
 iterCall = try $ do
     (ECall name args) <- funcCall
-    block <- fmap SBlock (braces $ many statement)
-    return $ SIterCall name args block
+    (argnames, block) <- braces inner
+    return $ SIterCall name args argnames block
+    where
+        inner = do
+            argNames <- option [] argList
+            block <- fmap SBlock $ many statement
+            return (argNames, block)
+        argList = do
+            symbol "|"
+            names <- commaSep identifier
+            symbol "|"
+            return names
 
 declaration :: Parser (Statement String)
 declaration = do
