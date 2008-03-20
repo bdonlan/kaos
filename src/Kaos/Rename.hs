@@ -14,6 +14,13 @@ import Kaos.KaosM
 
 type RenameT = StateT (M.Map String Slot) (ReaderT MacroContext KaosM)
 
+enterBlock :: RenameT a -> RenameT a
+enterBlock m = do
+    s <- get
+    r <- m
+    put s
+    return r
+
 renameLexicals :: MacroContext -> Statement String -> KaosM (Statement Slot)
 renameLexicals ctx st =
     runReaderT (evalStateT (renameStatement st) M.empty) ctx
@@ -29,7 +36,7 @@ renameStatement (SDeclare t decls) = fmap (SBlock . concat) $ mapM declOne decls
                     let assignment = SExpr (EAssign (ELexical name) e)
                     rv <- renameStatement assignment
                     return [rv]
-renameStatement (SBlock l)      = fmap SBlock $ mapM renameStatement l
+renameStatement (SBlock l)      = fmap SBlock $ enterBlock (mapM renameStatement l)
 renameStatement (SExpr e)       = fmap SExpr  $ renameExpr e
 renameStatement (SCond c s1 s2) =
     liftM3 SCond (renameCond c) (renameStatement s1) (renameStatement s2)
