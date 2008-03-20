@@ -51,12 +51,12 @@ data CoreLine t =
   | CoreTouch  (GenAccess Slot)
   | CoreCond   [CoreToken] (CoreBlock t) (CoreBlock t)
   | CoreLoop   (CoreBlock t)
+  | CoreFoldable Folder (CoreLine t)
 -- first slot is a temporary. It will be overwritten by Kaos.Targ
 -- this is horrible, fix it later :|
 --
 -- strict to keep me from making it undefined and later wondering why debug
 -- shows cause crashes
-  | CoreFoldable Folder (CoreLine t)
   | CoreTargReader !Slot Slot (CoreBlock t)
   | CoreTargWriter Slot (CoreBlock t)
   | CoreTypeSwitch { ctsSlot :: Slot
