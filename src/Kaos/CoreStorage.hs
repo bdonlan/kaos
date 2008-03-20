@@ -66,7 +66,6 @@ markBlock (CB l) = fmap CB $ mapM enterLine l
             return (line', StorageS storage future)
 
 markLine :: CoreLine FutureS -> MarkM (CoreLine StorageS)
-markLine (CoreTypeSwitch _ _ _ _) = fail "late CoreTypeSwitch"
 markLine l@(CoreNote _) = return $ fmap undefined l
 markLine l@(CoreTouch sa) = do
     markLine $ CoreLine [ TokenSlot sa ]

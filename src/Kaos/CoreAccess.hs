@@ -97,7 +97,6 @@ markLine' (CoreTargWriter s body) = do
     bodyA <- blockAccess body
     return $ amSingle s WriteAccess `mappend` bodyA
 
-markLine' l@(CoreTypeSwitch _ _ _ _) = error $ "Late typeswitch: " ++ show l
 markLine' (CoreNote _) = return amEmpty
 markLine' (CoreFoldable _ l) = markLine' l
 

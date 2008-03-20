@@ -3,7 +3,6 @@ module Kaos.Core (Core, CoreBlock(..), CoreLine(..), CoreToken(..),
              Kaos.AST.AccessType(..),
              AccessMap(..),
              GenAccess(..), SlotAccess,
-             coreNormalize,
              dumpCore, dumpCoreLine,
              mergeAccess,
              LineAccess(..), lineAccess,
@@ -16,7 +15,6 @@ import Data.Generics
 import qualified Data.Map as M
 import Kaos.PrettyM
 import Data.Char
-import Control.Arrow
 import Data.Monoid
 
 data Note = PrivateNote String
@@ -59,11 +57,6 @@ data CoreLine t =
 -- shows cause crashes
   | CoreTargReader !Slot Slot (CoreBlock t)
   | CoreTargWriter Slot (CoreBlock t)
-  | CoreTypeSwitch { ctsSlot :: Slot
-                   , ctsNum  :: CoreLine t 
-                   , ctsStr  :: CoreLine t
-                   , ctsObj  :: CoreLine t
-                   }
   -- TODO: CoreCondition, CoreLoop etc
   deriving (Show, Data, Typeable)
 
@@ -77,8 +70,6 @@ instance Functor CoreLine where
     fmap f (CoreTargWriter s b) = CoreTargWriter s (fmap f b)
     fmap f (CoreCond cond if_ else_) =
         CoreCond cond (fmap f if_) (fmap f else_)
-    fmap f (CoreTypeSwitch slot n s o) =
-        CoreTypeSwitch slot (fmap f n) (fmap f s) (fmap f o)
     fmap f (CoreLoop body ) =
         CoreLoop (fmap f body) 
     fmap f (CoreFoldable folder body) =
@@ -101,11 +92,6 @@ showLine (CoreCond cond ifb elsb) = prefixFirst "IF " $ do
     emitLine "ELSE"
     withIndent 5 $ showBlock elsb
     emitLine "ENDI"
-showLine (CoreTypeSwitch slot num str obj) = prefixFirst "CTS " $ do
-    emitLine $ "CONTROL: " ++ show slot
-    prefixFirst "NUM: " $ showLine num
-    prefixFirst "STR: " $ showLine str
-    prefixFirst "OBJ: " $ showLine obj
 showLine (CoreLoop body ) =
     prefixFirst "LOOP " $ showBlock body
 showLine (CoreTargReader ts slot body) = prefixFirst ("TARG ") $ do
@@ -121,19 +107,6 @@ showBlock :: Show f => CoreBlock f -> PrettyM ()
 showBlock (CB l) = mapM_ showpair l
     where
         showpair (l', info) = prefixFirst ((show info) ++ " ") (showLine l')
-
-lineNormalize :: CoreLine x -> CoreLine x
-lineNormalize (CoreTypeSwitch s cn cs co)
-    | slotType s == typeNum
-    = lineNormalize cn
-    | slotType s == typeStr
-    = lineNormalize cs
-    | slotType s == typeObj
-    = lineNormalize co
-lineNormalize l = l
-
-coreNormalize :: Core t -> Core t
-coreNormalize (CB l) = CB $ map (first lineNormalize) l
 
 newtype CoreBlock t = CB { unCB :: [(CoreLine t, t)] }
     deriving (Show, Data, Typeable)

@@ -73,7 +73,6 @@ markBlock (CB l) = do
             return (line', FutureS future acc)
 
 markLine :: CoreLine FutureS -> AccessMap -> FutureM (CoreLine FutureS)
-markLine (CoreTypeSwitch _ _ _ _) _ = fail "late CoreTypeSwitch (TODO: extra translate stage)"
 markLine cl@(CoreNote _) _ = return cl
 markLine cl@(CoreTouch sa) accM = do
     markLine (CoreLine [ TokenSlot sa ]) accM
