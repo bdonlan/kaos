@@ -95,6 +95,8 @@ emitILine (ICLoop body) = do
     bodyCore <- captureBlock $ mapM_ emitILine body
     emit $ CoreLoop bodyCore
 
+emitILine (ICKaos st) = astToCore' st
+
 translateITok :: MonadKaos m => InlineCAOSToken Slot -> CoreWriter m CoreToken
 translateITok (ICVar l at) = do
     slot <- expToCore (ELexical l)

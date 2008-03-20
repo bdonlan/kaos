@@ -100,6 +100,7 @@ data InlineCAOSLine l =
   | ICTargReader l [InlineCAOSLine l]
   | ICTargWriter l [InlineCAOSLine l]
   | ICLoop [InlineCAOSLine l]
+  | ICKaos (Statement l)
     deriving (Eq, Ord, Data, Typeable)
 
 data InlineCAOSToken l =

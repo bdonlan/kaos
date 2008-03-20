@@ -369,7 +369,13 @@ caosStmt = (caosPragma <|> caosCommand)
 caosPragma :: Parser (InlineCAOSLine String)
 caosPragma = do
     reservedOp "."
-    (caosAssign <|> caosTarg <|> caosLoop)
+    (caosAssign <|> caosTarg <|> caosLoop <|> caosKaos) <?> "inline CAOS directive"
+
+caosKaos :: Parser (InlineCAOSLine String)
+caosKaos = do
+    symbol "kaos"
+    block <- fmap SBlock $ braces (many statement)
+    return $ ICKaos block
 
 caosAssign :: Parser (InlineCAOSLine String)
 caosAssign = do
