@@ -91,6 +91,10 @@ emitILine (ICTargWriter var body) = do
     bodyCore <- captureBlock $ mapM_ emitILine body
     emit $ CoreTargWriter var bodyCore
 
+emitILine (ICLoop body) = do
+    bodyCore <- captureBlock $ mapM_ emitILine body
+    emit $ CoreLoop bodyCore
+
 translateITok :: MonadKaos m => InlineCAOSToken Slot -> CoreWriter m CoreToken
 translateITok (ICVar l at) = do
     slot <- expToCore (ELexical l)

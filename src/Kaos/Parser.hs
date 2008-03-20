@@ -369,11 +369,11 @@ caosStmt = (caosPragma <|> caosCommand)
 caosPragma :: Parser (InlineCAOSLine String)
 caosPragma = do
     reservedOp "."
-    (caosAssign <|> caosTarg)
+    (caosAssign <|> caosTarg <|> caosLoop)
 
 caosAssign :: Parser (InlineCAOSLine String)
 caosAssign = do
-        symbol "let"
+        try $ symbol "let"
         v1 <- caosVarName
         symbol "="
         try (finishConst v1) <|> (finishVar v1)
@@ -384,6 +384,12 @@ caosAssign = do
         finishConst v1 = do
             v2 <- constVal
             return $ ICConst v1 v2
+
+caosLoop :: Parser (InlineCAOSLine String)
+caosLoop = do
+    symbol "loop"
+    body <- inlineCAOSBlock
+    return $ ICLoop body
 
 caosTarg :: Parser (InlineCAOSLine String)
 caosTarg = do

@@ -50,6 +50,7 @@ renameILine (ICTargReader vs body) =
     liftM2 ICTargReader (lex2slot vs) (mapM renameILine body)
 renameILine (ICTargWriter vs body) =
     liftM2 ICTargWriter (lex2slot vs) (mapM renameILine body)
+renameILine (ICLoop body) = liftM ICLoop (mapM renameILine body)
 
 renameIToken :: InlineCAOSToken String -> RenameT (InlineCAOSToken Slot)
 renameIToken (ICVar l at) = do
