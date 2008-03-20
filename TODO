@@ -1,6 +1,5 @@
 Near term:
 
-* Use explicit static typing to simplify type-switching macros
 * Final regalloc stage STUBBED
   on hold until it becomes a problem
 * Error/warning reporting
