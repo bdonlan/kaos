@@ -23,11 +23,12 @@ data MacroArg = MacroArg    { maName    :: String
 data Macro = Macro  { mbName    :: String
                     , mbArgs    :: [MacroArg]
                     , mbCode    :: Statement String
+                    , mbRetType :: CAOSType
                     , mbContext :: MacroContext
                     }
 
 instance Show Macro where
-    show (Macro n a c _) = "Macro { mbName = " ++ (show n) ++ ", mbArgs = " ++ (show a) ++ ", mbCode = " ++ (show c) ++ " }"
+    show (Macro n a c t _) = "Macro { mbName = " ++ (show n) ++ ", mbArgs = " ++ (show a) ++ ", mbCode = " ++ (show c) ++ ", mbRetType = " ++ (show t) ++ " }"
 
 type MacroContext = String -> Maybe Macro
 

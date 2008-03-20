@@ -82,8 +82,9 @@ macroBlock = do
          .filter (isNothing . maDefault)
          .dropWhile (isNothing . maDefault)
          $ args) $ fail "All default macro arguments must be at the end of the argument list"
+    retType <- option typeVoid (reserved "returning" >> typeName)
     code <- braces bareBlock
-    return $ MacroBlock (Macro name args code)
+    return $ MacroBlock (Macro name args code retType)
 
 smallNatural :: forall i. (Integral i, Bounded i) => Parser i
 smallNatural = try gen <?> desc

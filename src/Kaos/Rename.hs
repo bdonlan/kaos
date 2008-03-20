@@ -81,6 +81,7 @@ renameExpr (ECall name e) = flip runContT return $ callCC $ \cc -> do
         (iprefix, newMap) <- instantiateVars [] M.empty (mbArgs macro) expSlots
         oldMap <- get
         put $ newMap
+        registerVar (mbRetType macro) "_return"
         inner <- local (const $ mbContext macro) $ renameStatement $ (SBlock $ iprefix ++ [mbCode macro])
         newMap' <- get
         put oldMap
