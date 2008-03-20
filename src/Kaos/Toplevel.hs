@@ -2,9 +2,10 @@ module Kaos.Toplevel (
 	KaosUnit(..),
 	KaosSource,
     Macro(..),
+    MacroType(..),
     MacroArg(..),
+    defaultMacro,
     MacroContext,
-    FreeMacro,
     Data.Word.Word8,
     Data.Word.Word16,
 ) where
@@ -12,6 +13,8 @@ module Kaos.Toplevel (
 import Data.Word (Word8, Word16)
 
 import Kaos.AST
+import Kaos.Slot
+import qualified Data.Map as M
 
 data MacroArg = MacroArg    { maName    :: String
                             , maType    :: CAOSType
@@ -20,24 +23,38 @@ data MacroArg = MacroArg    { maName    :: String
                             }
                             deriving (Show, Eq, Ord)
 
+data MacroType  = MacroRValue
+                | MacroLValue
+                | MacroIterator
+                deriving (Show, Eq, Ord)
+
 data Macro = Macro  { mbName    :: String
+                    , mbType    :: MacroType
                     , mbArgs    :: [MacroArg]
                     , mbCode    :: Statement String
                     , mbRetType :: CAOSType
+                    , mbLexVars :: M.Map String Slot
                     , mbContext :: MacroContext
                     }
 
+defaultMacro :: Macro
+defaultMacro =
+    Macro   { mbName    = undefined
+            , mbType    = undefined
+            , mbArgs    = undefined
+            , mbCode    = undefined
+            , mbRetType = undefined
+            , mbLexVars = M.empty
+            , mbContext = undefined
+            }
+
 instance Show Macro where
-    show (Macro n a c t _) = "Macro { mbName = " ++ (show n) ++ ", mbArgs = " ++ (show a) ++ ", mbCode = " ++ (show c) ++ ", mbRetType = " ++ (show t) ++ " }"
+    show (Macro n typ a c t l _) = "Macro { mbName = " ++ (show n) ++ ", mbType = " ++ (show typ) ++ ", mbArgs = " ++ (show a) ++ ", mbCode = " ++ (show c) ++ ", mbRetType = " ++ (show t) ++ ", mbLexVars = " ++ (show l) ++ " }"
 
 type MacroContext = String -> Maybe Macro
 
-type FreeMacro = MacroContext -> Macro
-instance Show FreeMacro where
-    show f = show $ f undefined
-
 data KaosUnit = InstallScript (Statement String)
-              | MacroBlock  FreeMacro
+              | MacroBlock  Macro
               | RemoveScript (Statement String)
               | AgentScript { asFamily  :: !Word8
                             , asGenus   :: !Word8

@@ -93,7 +93,7 @@ compileUnit (AgentScript fmly gnus spcs scrp code) = do
     emitScript "ENDM\n"
 compileUnit (MacroBlock macro) = do
     s <- get
-    let inCtx = macro $ flip M.lookup (csDefinedMacros s)
+    let inCtx = macro { mbContext = flip M.lookup (csDefinedMacros s) }
     put $ s { csDefinedMacros = M.insert (mbName inCtx) inCtx (csDefinedMacros s) }
 
 prepSeq :: CompileState -> S.Seq ByteString

@@ -73,9 +73,15 @@ argDefaultNote = do
     reservedOp "="
     liftM Just constVal
 
+macroType :: Parser MacroType
+macroType = (symbol "lvalue" >> return MacroLValue)
+        <|> (symbol "iterator" >> return MacroIterator)
+        <|> (return MacroRValue)
+
 macroBlock :: Parser KaosUnit
 macroBlock = do
     reserved "define"
+    mtyp <- macroType
     name <- identifier
     args <- parens (commaSep macroArg)
     when (([] /=)
@@ -83,8 +89,15 @@ macroBlock = do
          .dropWhile (isNothing . maDefault)
          $ args) $ fail "All default macro arguments must be at the end of the argument list"
     retType <- option typeVoid (reserved "returning" >> typeName)
+    when (retType /= typeVoid && mtyp /= MacroRValue) $
+        fail "Non-rvalue macros must be void"
     code <- braces bareBlock
-    return $ MacroBlock (Macro name args code retType)
+    return $ MacroBlock $ defaultMacro  { mbName = name
+                                        , mbType = mtyp
+                                        , mbArgs = args
+                                        , mbCode = code
+                                        , mbRetType = retType
+                                        }
 
 smallNatural :: forall i. (Integral i, Bounded i) => Parser i
 smallNatural = try gen <?> desc
