@@ -18,6 +18,16 @@ renameLexicals ctx st =
     runReaderT (evalStateT (renameStatement st) M.empty) ctx
 
 renameStatement :: Statement String -> RenameT (Statement Slot)
+renameStatement (SDeclare t decls) = fmap (SBlock . concat) $ mapM declOne decls
+    where
+        declOne (name, ive) = do
+            registerVar t name
+            case ive of
+                Nothing -> return []
+                Just e -> do
+                    let assignment = SExpr (EAssign (ELexical name) e)
+                    rv <- renameStatement assignment
+                    return [rv]
 renameStatement (SBlock l)      = fmap SBlock $ mapM renameStatement l
 renameStatement (SExpr e)       = fmap SExpr  $ renameExpr e
 renameStatement (SCond c s1 s2) =
@@ -61,7 +71,7 @@ renameExpr (ECall name e) = do
     macro <- case macroM of
         Nothing -> fail $ "Unknown macro name \"" ++ name ++ "\""
         Just  m -> return m
-    instd <- mapM instExpr e
+    instd <- mapM (uncurry instExpr) (zip e $ map maType (mbArgs macro))
     let expSlots = map fst instd
     let oprefix  = map snd instd
     (iprefix, newMap) <- instantiateVars [] M.empty (mbArgs macro) expSlots
@@ -72,9 +82,11 @@ renameExpr (ECall name e) = do
     put oldMap
     return $ EStmt (M.lookup "_return" newMap') (SBlock (oprefix ++ [inner]))
     where
-        instExpr :: Expression String -> RenameT (Slot, Statement Slot)
-        instExpr expr = do
-            slot <- newSlot
+        instExpr    :: Expression String
+                    -> CAOSType
+                    -> RenameT (Slot, Statement Slot)
+        instExpr expr t = do
+            slot <- newSlot t
             rexpr <- renameExpr expr
             return (slot, SExpr $ EAssign (ELexical slot) rexpr)
         instantiateVars prefix argMap [] [] = return (prefix, argMap)
@@ -100,10 +112,14 @@ lex2slot l = do
     s <- get
     case M.lookup l s of
         Just v -> return v
-        Nothing -> do
-            slot <- lift $ newSlot
-            put $ M.insert l slot s
-            return slot
+        Nothing -> fail $ "Variable not in scope: " ++ show l
+
+registerVar :: CAOSType -> String -> RenameT Slot
+registerVar t name = do
+    s <- get
+    slot <- lift $ newSlot t
+    put $ M.insert name slot s
+    return slot
 
 renameCond :: BoolExpr String -> RenameT (BoolExpr Slot)
 renameCond (BAnd b1 b2) = liftM2 BAnd (renameCond b1) (renameCond b2)

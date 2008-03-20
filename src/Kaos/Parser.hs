@@ -38,7 +38,8 @@ typeName :: Parser CAOSType
 typeName = (reserved "agent"    >> return typeObj)
         <|>(reserved "numeric"  >> return typeNum)
         <|>(reserved "string"   >> return typeStr)
-        <|>(reserved "any"      >> return typeAny)
+--        <|>(reserved "any"      >> return typeAny)
+        <|>(reserved "void"     >> return typeVoid)
 
 root :: Parser KaosSource
 root =  many1 kaosUnit
@@ -61,17 +62,11 @@ removeScript  = reserved "remove" >> liftM RemoveScript (braces bareBlock)
 
 macroArg :: Parser MacroArg
 macroArg = do
+    let output = False -- XXX
+    typ  <- typeName
     name <- identifier
-    (typ, output) <- option (typeAny, False) argTypeNote
     defaultval <- option Nothing argDefaultNote
     return $ MacroArg name typ output defaultval
-
-argTypeNote :: Parser (CAOSType, Bool)
-argTypeNote = do
-    reservedOp "::"
---    output <- option False (symbol "returning" >> return True)
-    typ <- option typeAny typeName
-    return $ (typ, False)
 
 argDefaultNote :: Parser (Maybe ConstValue)
 argDefaultNote = do
@@ -174,7 +169,7 @@ lexer  = P.makeTokenParser
             -- toplevel
             "install", "remove", "script", "define",
             -- types
-            "numeric", "string", "agent", "any", "returning",
+            "numeric", "string", "agent", "void", "returning",
             -- everything else
             "if", "else", "do", "until", "while", "for", "_caos", "_inst"]
          , caseSensitive   = True
@@ -306,8 +301,21 @@ instblock = do
     reserved "_inst"
     liftM (SInstBlock . SBlock) $ braces $ many statement
 
+declaration :: Parser (Statement String)
+declaration = do
+    t <- typeName
+    decls <- commaSep decl
+    return $ SDeclare t decls
+    where
+        decl :: Parser (String, Maybe (Expression String))
+        decl = do
+            i <- identifier
+            initVal <- option Nothing (reservedOp "=" >> fmap Just expr)
+            return (i, initVal)
+
 statement :: Parser (Statement String)
 statement = inlineCAOS
+        <|> declaration
         <|> exprstmt
         <|> ifstmt
         <|> dostmt

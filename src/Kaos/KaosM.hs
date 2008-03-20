@@ -4,6 +4,7 @@ module Kaos.KaosM (runKaosM, KaosM, newSlot, debugKM, MonadKaos(..),
 
 import Kaos.SeqT
 import Kaos.Slot
+import Kaos.AST
 import Control.Monad.Reader
 import Control.Monad.Writer
 import Control.Monad.State
@@ -33,8 +34,10 @@ data KState = KState
 newtype KaosM a = KM (StateT KState (SeqT Slot IO) a)
     deriving (Monad, Functor)
 
-newSlot :: MonadKaos m => m Slot
-newSlot = liftK $ KM (lift getNext)
+newSlot :: MonadKaos m => CAOSType -> m Slot
+newSlot t = liftK $ do
+    s <- KM (lift getNext)
+    return $ s { slotType = t }
 debugKM :: MonadKaos m => String -> m ()
 debugKM s = liftK $ KM (lift $ lift $ putStrLn s)
 

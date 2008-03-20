@@ -11,5 +11,3 @@
 	print ("\nx2 = ");
     print (x2);
 	print ("\n");
-#    print("x1 = ", x1, "\n");
-#    print("x2 = ", x2, "\n");

@@ -20,6 +20,7 @@ module Kaos.AST (
             ConstValue(..), Expression(..), Statement(..),
             CAOSType(ctNum, ctStr, ctObj), typeAnd, typeOr,
             typeAny, typeNum, typeStr, typeObj, typeVoid,
+            typeMatches,
             constType, comparisonToCAOS, BoolExpr(..),
             Comparison(..), AccessType(..),
             InlineCAOSToken(..), InlineCAOSLine(..),
@@ -89,6 +90,7 @@ data Statement l =
   | SCond       (BoolExpr l) (Statement l) (Statement l)
   | SICaos      [InlineCAOSLine l]
   | SInstBlock  (Statement l)
+  | SDeclare    CAOSType [(l, (Maybe (Expression l)))]
     deriving (Eq, Ord, Data, Typeable)
 
 data InlineCAOSLine l =

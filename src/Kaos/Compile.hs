@@ -22,7 +22,6 @@ import Kaos.RegAlloc
 import Kaos.Emit
 import Kaos.Targ
 import Kaos.ASTTransforms
-import Kaos.Typecheck
 import Kaos.Toplevel
 import Kaos.KaosM
 
@@ -48,7 +47,7 @@ compileCode' ctx parses =
     preRenameTransforms parses              >>=
     renameLexicals ctx                      >>=
     postRenameTransforms                    >>=
-    typecheck . astToCore                   >>=
+    astToCore                               >>=
     dumpFlagged "dump-early-core" dumpCore  >>=
     targExpand                              >>=
     dumpFlagged "dump-final-core" dumpCore  >>=

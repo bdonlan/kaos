@@ -11,7 +11,6 @@ import Data.Maybe
 
 import Kaos.AST
 import Kaos.Core
-import Kaos.Slot
 import Kaos.KaosM
 import Kaos.CoreAccess
 import Kaos.CoreAlias
@@ -44,9 +43,8 @@ tagTempSlots = everywhereM (mkM tagLine)
     where
         tagLine :: CoreLine () -> KaosM (CoreLine ())
         tagLine (CoreTargReader _ s b) = do
-            ts <- newSlot
-            let ts' = ts { slotType = typeObj }
-            return $ CoreTargReader ts' s b
+            ts <- newSlot typeObj
+            return $ CoreTargReader ts s b
         tagLine l = return l
 
 usesTarg :: CoreLine t -> Bool
