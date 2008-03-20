@@ -2,6 +2,7 @@ module Kaos.Rename (renameLexicals) where
 
 import Control.Monad.State
 import Control.Monad.Reader
+import Control.Monad.Cont
 import qualified Data.Map as M
 import Data.Maybe
 
@@ -66,21 +67,24 @@ renameExpr (ELexical l) = fmap ELexical $ lex2slot l
 renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
 
 --renameExpr (ECall s e) = fmap (ECall s) $ mapM renameExpr e
-renameExpr (ECall name e) = do
+renameExpr (ECall name e) = flip runContT return $ callCC $ \cc -> do
     macroM <- asks ($name)
     macro <- case macroM of
-        Nothing -> fail $ "Unknown macro name \"" ++ name ++ "\""
+        Nothing -> do -- pass it down to ASTToCore in case it's a builtin
+            e' <- lift $ mapM renameExpr e
+            cc $ ECall name e'
         Just  m -> return m
-    instd <- mapM (uncurry instExpr) (zip e $ map maType (mbArgs macro))
-    let expSlots = map fst instd
-    let oprefix  = map snd instd
-    (iprefix, newMap) <- instantiateVars [] M.empty (mbArgs macro) expSlots
-    oldMap <- get
-    put $ newMap
-    inner <- local (const $ mbContext macro) $ renameStatement $ (SBlock $ iprefix ++ [mbCode macro])
-    newMap' <- get
-    put oldMap
-    return $ EStmt (M.lookup "_return" newMap') (SBlock (oprefix ++ [inner]))
+    lift $ do
+        instd <- mapM (uncurry instExpr) (zip e $ map maType (mbArgs macro))
+        let expSlots = map fst instd
+        let oprefix  = map snd instd
+        (iprefix, newMap) <- instantiateVars [] M.empty (mbArgs macro) expSlots
+        oldMap <- get
+        put $ newMap
+        inner <- local (const $ mbContext macro) $ renameStatement $ (SBlock $ iprefix ++ [mbCode macro])
+        newMap' <- get
+        put oldMap
+        return $ EStmt (M.lookup "_return" newMap') (SBlock (oprefix ++ [inner]))
     where
         instExpr    :: Expression String
                     -> CAOSType
