@@ -11,6 +11,7 @@ import Data.Maybe
 
 import Kaos.AST
 import Kaos.Core
+import Kaos.Slot
 import Kaos.KaosM
 import Kaos.CoreAccess
 import Kaos.CoreAlias
@@ -125,7 +126,7 @@ mergeAdjacent = return . everywhere (mkT mergeBlock)
                     = Just $ (CoreTargReader ts1 s1 (CB (blk1 ++ blk2)), rAlias)
                 tryMerge (CoreTargWriter s1 (CB blk1)) (CoreTargReader _ s2 (CB blk2)) wAlias rAlias
                     | AM.aliases s1 s2 wAlias
-                    = Just $ (CoreTargWriter s1 (CB $ blk1 ++ blk2), rAlias)
+                    = Just $ (CoreTargWriter s1 (CB $ blk1 ++ [(targAssign s1, undefined)] ++ blk2), rAlias)
                 tryMerge _ _ _ _ = Nothing
 
 stripTarg :: Core () -> KaosM (Core ())
@@ -140,6 +141,9 @@ stripTarg = return . everywhere (mkT stripOneTarg)
             ++ remain
         stripOneTarg' ((CoreTargWriter slot block):remain) =
                (map fst . unCB $ block)
-            ++ [CoreLine [TokenLiteral "seta", TokenSlot (SA slot WriteAccess), TokenLiteral "targ"]]
+            ++ [targAssign slot]
             ++ remain
         stripOneTarg' l = l
+
+targAssign :: Slot -> CoreLine a
+targAssign slot = CoreLine [TokenLiteral "seta", TokenSlot (SA slot WriteAccess), TokenLiteral "targ"]
