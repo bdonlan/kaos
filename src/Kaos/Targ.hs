@@ -29,7 +29,7 @@ targExpand d = return (fmap (const ()) d)
            >>= tagTempSlots
            >>= debugDumpCore "dump-targ-marked"
            >>= markAccess
-           >>= expandForward
+           >>= expandBackward
            >>= debugDumpCore "dump-targ-expanded"
            >>= markAccess -- may be out of date
            >>= markAliasing
@@ -61,53 +61,33 @@ usesTarg core = worker `runCont` id
         checkTarg ret (CoreTargWriter _ _) = ret True
         checkTarg _ t = return t
 
-expandForward :: Core AccessMap -> KaosM (Core AccessMap)
-expandForward = return . everywhere (mkT expandOne)
+expandBackward :: Core AccessMap -> KaosM (Core AccessMap)
+expandBackward = return . everywhere (mkT expandOne)
     where
         expandOne :: [(CoreLine AccessMap, AccessMap)]
                   -> [(CoreLine AccessMap, AccessMap)]
-        -- Special case: When expanding a sequence like this:
-        --   .targ > $obj { ... }; .let $var = $obj; .targ < $var { ... } ;
-        -- we must manually merge the assignment there. Currently this is
-        -- done by merging /backwards/ like so:
-        --
-        -- .let $var = $obj; .targ < $var { ... }; 
-        -- becomes
-        -- .targ < $obj { .let $var = $obj; ... };
-        --
-        -- We also handle the case where:
-        -- .let $var = $obj;
-        -- .targ < $obj { ... };
-        -- similarly
+        -- When an assignment appears before a targread, follow the rename
         expandOne (a@(CoreAssign vdest vsrc, am1):(CoreTargReader ts s (CB blk), am2):remain)
             | vdest == s || vsrc == s
             = (CoreTargReader ts vsrc (CB $ a:blk), mergedAM):remain
             where
-                mergedAM = am1 `mergeAM` am2
-        expandOne orig@((curL, curAM):(nextL, nextAM):remain)
-            | not eligible || usesTarg nextL || (isWrite && usesSlot)
-            = orig
-            | otherwise
-            = (newL, curAM `mergeAM` nextAM):remain
-            where
-                (eligible, isWrite, mySlot, newL) = check curL
-                check (CoreTargReader ts s (CB block))
-                    =   (True
-                        ,False
-                        ,s
-                        ,CoreTargReader ts s (CB $ block ++ [(nextL, nextAM)])
-                        )
-                check (CoreTargWriter s (CB block))
-                    =   (True
-                        ,True
-                        ,s
-                        ,CoreTargWriter s(CB $ block ++ [(nextL, nextAM)])
-                        )
-                check _ = (False, undefined, undefined, undefined)
-                usesSlot =
-                    isJust $ M.lookup mySlot nextAM' >>= guard . (/= NoAccess)
-                nextAM' = getAM $ getLineAccess nextAM
-        expandOne l = l
+                mergedAM = am1 `mergeAM` am2       
+        -- Do not expand across other targ blocks; this is a job for later phases
+        expandOne xs@((prev, _):_)
+            | usesTarg prev
+            = xs
+        -- Read swallows anything that doesn't write to its variable
+        expandOne (target@(_, targetAM):(CoreTargReader ts s (CB blk), am2):xs)
+            | not (targetAM `writesSlot` ts || targetAM `writesSlot` s)
+            = (CoreTargReader ts s (CB $ target:blk), am2 `mergeAM` targetAM):xs
+        -- Write swallows anything at all
+        expandOne (target@(_, targetAM):(CoreTargWriter s (CB blk), am2):xs)
+            = (CoreTargWriter s (CB $ target:blk), am2 `mergeAM` targetAM):xs
+        -- Leave anything else alone
+        expandOne xs = xs
+
+writesSlot :: AccessMap -> Slot -> Bool
+(AM am) `writesSlot` slot = (fromMaybe NoAccess $ M.lookup slot am) > ReadAccess
 
 mergeAdjacent :: Core AliasTag -> KaosM (Core AliasTag)
 mergeAdjacent = return . everywhere (mkT mergeBlock)
