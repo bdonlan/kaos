@@ -1,16 +1,11 @@
-Near term:
-
-* Final regalloc stage STUBBED
-  on hold until it becomes a problem
-* Error/warning reporting
-* Better pretty-printing
-* Macros, root blocks - basic (CAOS model) structure for now
-  * After this point, work can begin on the prelude
-* Inline rvalue expressions into slots via the const propagation system
-* LValues other than slots
-
-Long term:
-
-* Smarter top-level design
-  ???
-* ...
+* More useful error reporting
+* Allow macros to define inlinable lvalues and rvalues
+  - pure/impure/idempotent
+  - validity, initially statement scope
+* Debug TARG a bit
+* More prelude definitions
+(preview release?)
+* Final regalloc stage
+* Compound types - user defined?
+  - parts
+(alpha release?)
