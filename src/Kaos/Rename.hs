@@ -68,10 +68,10 @@ renameStatement (SInstBlock s) = liftM SInstBlock $ renameStatement s
 renameStatement (SIterCall name args argNames block) = do
     macroM <- getMacro ("iter:" ++ name)
     case macroM of
-        Nothing -> fail ("Unknown iterator macro " ++ name)
+        Nothing -> compileError ("Unknown iterator macro " ++ name)
         Just m  -> do
             when ( (length argNames) /= (length $ miArgTypes $ mbType m)) $
-                fail "Iteree block has the wrong number of arguments"
+                compileError "Iteree block has the wrong number of arguments"
             lexCtx <- get
             macroCtx <- asks rcMacros
             let innerArgs = zipWith (\argN typ -> MacroArg argN typ Nothing)
@@ -124,7 +124,7 @@ renameExpr (EAssign e1@(ELexical _) e2) =
     liftM2 EAssign (renameExpr e1) (renameExpr e2)
 renameExpr (EAssign (ECall name e) e2) =
     renameExpr (ECall ("set:" ++ name) (e2:e))
-renameExpr (EAssign e _) = fail $ "Not an LValue: " ++ (show e)
+renameExpr (EAssign e _) = compileError $ "Not an LValue: " ++ (show e)
 renameExpr (ELexical l) = fmap ELexical $ lex2slot l
 renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
 
@@ -161,12 +161,12 @@ renameMacro macro e = do
             rexpr <- renameExpr expr
             return (slot, SExpr $ EAssign (ELexical slot) rexpr)
         instantiateVars prefix argMap [] [] = return (prefix, argMap)
-        instantiateVars _ _ [] (_:_) = fail $ "Too many args for macro '" ++ name ++ "'"
+        instantiateVars _ _ [] (_:_) = compileError $ "Too many args for macro '" ++ name ++ "'"
         instantiateVars prefix argMap (harg:args) []
             | isJust $ maDefault harg
             = instantiateVars (constSetter:prefix) argMap args []
             | otherwise
-            = fail $ "Too few args for macro '" ++ name ++ "'"
+            = compileError $ "Too few args for macro '" ++ name ++ "'"
             where
                 constSetter = SExpr (EAssign (ELexical (maName harg)) (EConst (fromJust $ maDefault harg)))
         instantiateVars prefix argMap (harg:args) (hexp:exps) = do
