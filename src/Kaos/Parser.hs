@@ -184,7 +184,8 @@ lexer :: P.TokenParser ()
 lexer  = P.makeTokenParser 
          (emptyDef
          { reservedOpNames = ["*","/","+","-",
-                              ",","::",
+                              ",","&&","||",
+                              "|","&",
                               ">","<",">=","<=","!=","==",
                               "!",".","=","[","]",".",
                               "*=", "/=", "+=", "-="]
@@ -206,6 +207,7 @@ expr    = buildExpressionParser table factor
 table :: [[Operator Char () (Expression String)]]
 table   = [[Prefix (do { reservedOp "!"; return $ EBoolCast . BNot . BExpr})]
           ,[op "*" "mulv" AssocLeft, op "/" "divv" AssocLeft]
+          ,[op "&" "andv" AssocLeft, op "|" "orrv" AssocLeft]
           ,[op "+" "addv" AssocLeft, op "-" "subv" AssocLeft]
           ,map mkCompar comparOps
           ,[Infix (do { reservedOp "&&"; return $ \a b -> EBoolCast (BAnd (BExpr a) (BExpr b))}) AssocLeft

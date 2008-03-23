@@ -7,6 +7,7 @@ import Kaos.KaosM
 import Control.Monad.Writer
 import Data.Generics
 import Data.Maybe
+import Data.Bits
 import qualified Data.Map as M
 
 type CoreWriter m a = WriterT [CoreLine ()] m a
@@ -170,6 +171,16 @@ numBinOp    :: String
 numBinOp token dfold ifold =
     ( (typeNum, typeNum), BO token typeNum (Just $ numFolder dfold ifold))
 
+
+intBinOp    :: String
+            -> (Int -> Int -> Int)
+            -> ( (CAOSType, CAOSType), BinOp)
+intBinOp token ifold =
+    ( (typeNum, typeNum), BO token typeNum (Just doFold) )
+    where
+        doFold (CInteger v1) (CInteger v2) = Just $ CInteger $ ifold v1 v2
+        doFold _ _ = Nothing
+
 data BinOp = BO String CAOSType (Maybe FolderCore)
 binaryOps :: M.Map String (M.Map (CAOSType, CAOSType) BinOp)
 binaryOps = M.fromList $ map (\(n, l) -> (n, M.fromList l)) binaryOps'
@@ -179,7 +190,9 @@ binaryOps' = [
     ("addv", [numBinOp "addv" (+) (+)]),
     ("subv", [numBinOp "subv" (-) (-)]),
     ("mulv", [numBinOp "mulv" (*) (*)]),
-    ("divv", [numBinOp "divv" (/) div])
+    ("divv", [numBinOp "divv" (/) div]),
+    ("andv", [intBinOp "addv" (.&.)]),
+    ("orrv", [intBinOp "orrv" (.|.)])
     ]
 
 expToCore :: MonadKaos m => Expression Slot -> CoreWriter m Slot
