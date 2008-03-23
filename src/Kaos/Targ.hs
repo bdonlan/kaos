@@ -142,9 +142,11 @@ stripTarg = return . everywhere (mkT stripOneTarg)
         stripOneTarg' ((CoreTargReader tempslot slot block):remain) =
                [(CoreAssign tempslot slot),(CoreLine [TokenLiteral "targ", TokenSlot (SA tempslot ReadAccess)])]
             ++ (map fst . unCB $ block)
+            ++ [CoreTargZap]
             ++ remain
         stripOneTarg' ((CoreTargWriter _ block):remain) =
                (map fst . unCB $ block)
+            ++ [CoreTargZap]
             ++ remain
         stripOneTarg' l = l
 
