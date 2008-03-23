@@ -1,6 +1,7 @@
 module Kaos.KaosM (runKaosM, KaosM, newSlot, debugKM, MonadKaos(..),
                   isSet, whenSet, debugDump, KaosDiag, KaosContext(..),
-                  internalError, compileError, warning, KaosDiagM(..)
+                  internalError, compileError, warning, KaosDiagM(..),
+                  putCtx, getCtx, context
                   ) where
 
 import Kaos.SeqT
@@ -65,7 +66,14 @@ initState flags = KState flags Nothing False
 
 type KaosM' a = ErrorT KaosDiag (StateT KState (SeqT Slot IO)) a
 newtype KaosM a = KM { unKM :: KaosM' a }
-    deriving (Functor, Monad)
+    deriving (Functor)
+
+instance Monad KaosM where
+    return = KM . return
+    (KM a) >>= f   = KM $ do
+        r <- a
+        unKM $ f r
+    fail = internalError
 
 instance MonadError KaosDiag KaosM where
     throwError e = KM $ do
@@ -75,10 +83,10 @@ instance MonadError KaosDiag KaosM where
 
 class MonadKaos m => KaosDiagM m where
     checkpoint    :: a -> m a -> m a
-    context       :: KaosContext -> m a -> m a
+    saveCtx       :: m a -> m a
 
-internalError :: MonadKaos m => String -> m ()
-internalError = liftK . fail
+internalError :: MonadKaos m => String -> m a
+internalError = liftK . KM . fail
 
 compileError :: MonadKaos m => String -> m ()
 compileError s = liftK $
@@ -89,15 +97,15 @@ warning = liftK . kmWarning
 
 instance KaosDiagM b => KaosDiagM (StateT s b) where
     checkpoint d m = StateT $ \st -> checkpoint (d, st) $ runStateT m st
-    context ctx m  = StateT $ \st -> context ctx $ runStateT m st
+    saveCtx      m = StateT $ \st -> saveCtx $ runStateT m st
 
 instance KaosDiagM b => KaosDiagM (SeqT s b) where
     checkpoint d m = SeqT   $ checkpoint d (unSeqT m)
-    context ctx  m = SeqT   $ context ctx  (unSeqT m)
+    saveCtx      m = SeqT   $ saveCtx      (unSeqT m)
 
 instance KaosDiagM KaosM where
     checkpoint    = kmCheckpoint
-    context       = kmContext
+    saveCtx       = KM . saveCtx' . unKM
 
 printDiag :: MonadIO m => KaosDiag -> m ()
 printDiag d = liftIO $ do
@@ -113,26 +121,31 @@ kmWarning message = KM $ do
     ctx <- fmap kContext get
     printDiag (KaosDiag False False ctx message)
 
-saveCtx :: KaosM' a -> KaosM' a
-saveCtx m = do
-    ctx <- fmap kContext get
-    ret <- m
-    modify $ \s -> s { kContext = ctx }
-    return ret
+getCtx   :: MonadKaos m => m (Maybe KaosContext)
+getCtx = liftK (KM $ gets kContext)
+
+putCtx   :: MonadKaos m => Maybe KaosContext -> m ()
+putCtx c = liftK (KM $ modify (\s -> s { kContext = c }))
+
+context  :: KaosDiagM m => KaosContext -> m a -> m a
+context c m = saveCtx $ putCtx (Just c) >> m
+
+saveCtx' :: KaosM' a -> KaosM' a
+saveCtx' m = do
+    c <- gets kContext
+    r <- m
+    unKM $ putCtx c
+    return r
 
 kmCheckpoint :: a -> KaosM a -> KaosM a
-kmCheckpoint dummyVal (KM m) = KM $ saveCtx $ catchError m report
+kmCheckpoint dummyVal (KM m) = KM $ saveCtx' $ catchError m report
     where
         report err = do
             s <- get
             put $ s { kFailed = True }
-            when (not (kFailed s) || not (kdInternal err)) $ printDiag err
+            let err' = err { kdContext = kContext s }
+            when (not (kFailed s) || not (kdInternal err)) $ printDiag err'
             return dummyVal
-
-kmContext :: KaosContext -> KaosM r -> KaosM r
-kmContext ctx (KM m) = KM $ saveCtx $ do
-    modify $ \s -> s { kContext = Just ctx }
-    m
 
 newSlot :: MonadKaos m => CAOSType -> m Slot
 newSlot t = liftK $ do
