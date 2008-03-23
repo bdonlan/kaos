@@ -149,4 +149,4 @@ stripTarg = return . everywhere (mkT stripOneTarg)
         stripOneTarg' l = l
 
 targAssign :: Slot -> CoreLine a
-targAssign slot = CoreLine [TokenLiteral "seta", TokenSlot (SA slot WriteAccess), TokenLiteral "targ"]
+targAssign slot = CoreInlineAssign maxBound True slot [TokenLiteral "targ"]
