@@ -7,8 +7,6 @@ import Data.Generics
 import qualified Data.Map as M
 import Data.Maybe
 
---import Debug.Trace
-
 import Kaos.AST
 import Kaos.Core
 import Kaos.Slot
@@ -31,11 +29,14 @@ targExpand d = return (fmap (const ()) d)
            >>= markAccess
            >>= expandBackward
            >>= debugDumpCore "dump-targ-expanded"
+           >>= injectAssignments
            >>= markAccess -- may be out of date
            >>= markAliasing
            >>= mergeAdjacent
            >>= debugDumpCore "dump-targ-merged"
            >>= (return . (fmap (const ())))
+           >>= expandForward
+           >>= debugDumpCore "dump-targ-final"
 
 tagTempSlots :: Core () -> KaosM (Core ())
 tagTempSlots = everywhereM (mkM tagLine)
@@ -58,6 +59,31 @@ usesTarg core = worker `runCont` id
         checkTarg ret (CoreTargReader _ _ _) = ret True
         checkTarg ret (CoreTargWriter _ _) = ret True
         checkTarg _ t = return t
+
+injectAssignments :: Core AccessMap -> KaosM (Core AccessMap)
+injectAssignments = return . everywhere (mkT injectOne)
+    where
+        injectOne :: CoreLine AccessMap -> CoreLine AccessMap
+        injectOne (CoreTargWriter slot (CB ls)) =
+            CoreTargWriter slot (CB $ ls ++ [(targAssign slot, undefined)])
+        injectOne l = l
+
+expandForward  :: Core () -> KaosM (Core ())
+expandForward = return . everywhere' (mkT expandOne)
+    where
+        expandOne :: [(CoreLine (), ())]
+                  -> [(CoreLine (), ())]
+        -- by now, reads and writes have been merged,
+        -- and crucially each write has its assignment statement added
+        -- we can now expand forward to swallow up targ-neutral lines
+        expandOne p@(_:(line, ()):_)
+            | usesTarg line
+            = p
+        expandOne ((CoreTargReader ts s (CB blk), ()):lp:ls)
+            = expandOne $ (CoreTargReader ts s (CB (blk ++ [lp])), ()):ls
+        expandOne ((CoreTargWriter s (CB blk), ()):lp:ls)
+            = expandOne $ (CoreTargWriter s (CB (blk ++ [lp])), ()):ls
+        expandOne p = p
 
 expandBackward :: Core AccessMap -> KaosM (Core AccessMap)
 expandBackward = return . everywhere (mkT expandOne)
@@ -104,7 +130,7 @@ mergeAdjacent = return . everywhere (mkT mergeBlock)
                     = Just $ (CoreTargReader ts1 s1 (CB (blk1 ++ blk2)), rAlias)
                 tryMerge (CoreTargWriter s1 (CB blk1)) (CoreTargReader _ s2 (CB blk2)) wAlias rAlias
                     | AM.aliases s1 s2 wAlias
-                    = Just $ (CoreTargWriter s1 (CB $ blk1 ++ [(targAssign s1, undefined)] ++ blk2), rAlias)
+                    = Just $ (CoreTargWriter s1 (CB $ blk1 ++ blk2), rAlias)
                 tryMerge _ _ _ _ = Nothing
 
 stripTarg :: Core () -> KaosM (Core ())
@@ -117,9 +143,8 @@ stripTarg = return . everywhere (mkT stripOneTarg)
                [(CoreAssign tempslot slot),(CoreLine [TokenLiteral "targ", TokenSlot (SA tempslot ReadAccess)])]
             ++ (map fst . unCB $ block)
             ++ remain
-        stripOneTarg' ((CoreTargWriter slot block):remain) =
+        stripOneTarg' ((CoreTargWriter _ block):remain) =
                (map fst . unCB $ block)
-            ++ [targAssign slot]
             ++ remain
         stripOneTarg' l = l
 
