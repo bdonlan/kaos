@@ -26,6 +26,7 @@ import Kaos.ASTTransforms
 import Kaos.Toplevel
 import Kaos.CoreInline
 import Kaos.KaosM
+import Kaos.PrettyM
 
 
 dumpFlagged :: String -> (t -> String) -> t -> KaosM t
@@ -45,9 +46,13 @@ compileCode code = do
     st <- get
     lift $ compileCode' (flip M.lookup $ csDefinedMacros st) code
 
+dumpStmt :: Statement String -> String
+dumpStmt = runPretty . prettyStatement
+
 compileCode' :: MacroContext -> Statement String -> KaosM String
-compileCode' ctx parses =
-    preRenameTransforms parses              >>=
+compileCode' ctx parses = return parses     >>=
+    preRenameTransforms                     >>=
+    dumpFlagged "dump-ast" dumpStmt         >>=
     renameLexicals ctx                      >>=
     postRenameTransforms                    >>=
     astToCore                               >>=

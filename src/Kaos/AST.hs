@@ -20,7 +20,7 @@ module Kaos.AST (
             ConstValue(..), Expression(..), Statement(..),
             CAOSType(ctNum, ctStr, ctObj), typeAnd, typeOr,
             typeAny, typeNum, typeStr, typeObj, typeVoid,
-            typeMatches,
+            typeMatches, prettyStatement,
             constType, comparisonToCAOS, BoolExpr(..),
             Comparison(..), AccessType(..),
             InlineCAOSToken(..), InlineCAOSLine(..),
@@ -93,7 +93,7 @@ data Statement l =
   | SDeclare    CAOSType [(l, (Maybe (Expression l)))]
   | SIterCall   String [Expression l] [String] (Statement l)
   | SFlush      Int
-    deriving (Eq, Ord, Data, Typeable)
+    deriving (Eq, Ord, Data, Typeable, Show)
 
 data InlineCAOSLine l =
     ICAssign l l
@@ -105,12 +105,12 @@ data InlineCAOSLine l =
   | ICKaos (Statement l)
   | ICLValue Int l [InlineCAOSToken l]
   | ICTargZap
-    deriving (Eq, Ord, Data, Typeable)
+    deriving (Eq, Ord, Data, Typeable, Show)
 
 data InlineCAOSToken l =
     ICVar l AccessType
   | ICWord String
-    deriving (Eq, Ord, Data, Typeable)
+    deriving (Eq, Ord, Data, Typeable, Show)
 
 prettyStatement :: Show t => Statement t -> PrettyM ()
 prettyStatement (SExpr e) = emitLine $ (show e) ++ ";"
@@ -118,10 +118,10 @@ prettyStatement (SBlock b) = do
     emitLine "{"
     withIndent 2 $ mapM_ prettyStatement b
     emitLine "}"
-prettyStatement x = emitLine $ show x -- XXX
-
-instance Show l => Show (Statement l) where
-    show = runPretty . prettyStatement
+prettyStatement (SContext c s) = withIndent 2 $ do
+    emitLine $ "AT " ++ show c
+    prettyStatement s
+prettyStatement x = emitLine $ show x
 
 data CAOSType = CAOSType { ctNum :: Bool
                          , ctStr :: Bool
