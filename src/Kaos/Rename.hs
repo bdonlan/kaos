@@ -36,6 +36,8 @@ renameLexicals ctx st =
     runReaderT (evalStateT (renameStatement st) M.empty) (RC ctx 0)
 
 renameStatement :: Statement String -> RenameT (Statement Slot)
+renameStatement (SContext c s) = 
+    context c $ liftM (SContext c) (renameStatement s)
 renameStatement (SFlush l) =
     return $ SFlush l -- this probably shouldn't actually appear
 renameStatement (SDeclare t decls) = fmap (SBlock . concat) $ mapM declOne decls
@@ -181,7 +183,7 @@ lex2slot l = do
     s <- get
     case M.lookup l s of
         Just v -> return v
-        Nothing -> fail $ "Variable not in scope: " ++ show l
+        Nothing -> compileError $ "Variable not in scope: " ++ show l
 
 registerVar :: CAOSType -> String -> RenameT Slot
 registerVar t name = do

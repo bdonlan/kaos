@@ -1,5 +1,5 @@
 module Kaos.KaosM (runKaosM, KaosM, newSlot, debugKM, MonadKaos(..),
-                  isSet, whenSet, debugDump, KaosDiag, KaosContext(..),
+                  isSet, whenSet, debugDump, KaosDiag,
                   internalError, compileError, warning, KaosDiagM(..),
                   putCtx, getCtx, context
                   ) where
@@ -31,16 +31,9 @@ instance (MonadKaos m) => MonadKaos (SeqT i m) where
 instance MonadKaos KaosM where
     liftK = id
 
-data KaosContext = KaosContext  { kcFileName :: String
-                                , kcLineNum  :: Int
-                                }
-
-instance Show KaosContext where
-    show = showContext . Just
-
 showContext :: Maybe KaosContext -> String
 showContext Nothing = "(unknown)"
-showContext (Just kc) = (kcFileName kc) ++ (show $ kcLineNum kc)
+showContext (Just kc) = (kcFileName kc) ++ ":" ++ (show $ kcLineNum kc)
 
 data KaosDiag = KaosDiag    { kdFatal   :: Bool
                             , kdInternal:: Bool
@@ -88,7 +81,7 @@ class MonadKaos m => KaosDiagM m where
 internalError :: MonadKaos m => String -> m a
 internalError = liftK . KM . fail
 
-compileError :: MonadKaos m => String -> m ()
+compileError :: MonadKaos m => String -> m a
 compileError s = liftK $
     throwError $ KaosDiag { kdFatal = True, kdInternal = False, kdMessage = s, kdContext = Nothing }
 
@@ -98,6 +91,14 @@ warning = liftK . kmWarning
 instance KaosDiagM b => KaosDiagM (StateT s b) where
     checkpoint d m = StateT $ \st -> checkpoint (d, st) $ runStateT m st
     saveCtx      m = StateT $ \st -> saveCtx $ runStateT m st
+
+instance KaosDiagM b => KaosDiagM (ReaderT e b) where
+    checkpoint d m = ReaderT $ \env -> checkpoint d $ runReaderT m env
+    saveCtx      m = ReaderT $ \env -> saveCtx $ runReaderT m env
+
+instance (Monoid w, KaosDiagM b) => KaosDiagM (WriterT w b) where
+    checkpoint d m = WriterT $ checkpoint (d, mempty) $ runWriterT m
+    saveCtx      m = WriterT $ saveCtx $ runWriterT m
 
 instance KaosDiagM b => KaosDiagM (SeqT s b) where
     checkpoint d m = SeqT   $ checkpoint d (unSeqT m)

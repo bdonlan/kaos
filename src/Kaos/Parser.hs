@@ -390,7 +390,12 @@ declaration = do
             return (i, initVal)
 
 statement :: Parser (Statement String)
-statement = inlineCAOS
+statement = do
+    pos <- getPosition
+    liftM (SContext (KaosContext (sourceName pos) (sourceLine pos))) statement'
+
+statement' :: Parser (Statement String)
+statement' = inlineCAOS
         <|> declaration
         <|> iterCall
         <|> exprstmt

@@ -22,19 +22,20 @@ typeIs (Slot _ _ ct') ct
 sameType :: Monad m => Slot -> Slot -> m ()
 sameType s1 s2 = typeIs s1 (slotType s2)
 
-captureBlock :: MonadKaos m => CoreWriter m x -> CoreWriter m (CoreBlock ())
+captureBlock :: KaosDiagM m => CoreWriter m x -> CoreWriter m (CoreBlock ())
 captureBlock = liftM (unitBlock . snd) . censor (const []) . listen
 
 --XXX: should this be in Core?
 unitBlock :: [CoreLine ()] -> CoreBlock ()
 unitBlock = CB . map (\line -> (line, ()))
 
-astToCore :: MonadKaos m => Statement Slot -> m (Core ())
+astToCore :: KaosDiagM m => Statement Slot -> m (Core ())
 astToCore ast = do
     ((), ls) <- runWriterT $ astToCore' ast
     return $ unitBlock (ls :: [CoreLine ()])
 
-astToCore' :: MonadKaos m => Statement Slot -> CoreWriter m ()
+astToCore' :: KaosDiagM m => Statement Slot -> CoreWriter m ()
+astToCore' (SContext c s) = context c $ astToCore' s
 astToCore' s@(SDeclare _ _) = fail $ "Late SDeclare: " ++ show s
 astToCore' (SExpr e) = do
     expToCore e
@@ -73,7 +74,7 @@ astToCore' (SIterCall _ _ _ _) = fail "late SIterCall"
 astToCore' (SFlush level) = emit $ CoreInlineFlush level
 
 
-emitILine :: MonadKaos m => InlineCAOSLine Slot -> CoreWriter m ()
+emitILine :: KaosDiagM m => InlineCAOSLine Slot -> CoreWriter m ()
 emitILine (ICAssign v1 v2) = do
     expToCore (EAssign (ELexical v1) (ELexical v2))
     return ()
@@ -106,20 +107,20 @@ emitILine (ICLValue level slot tokens) = do
     emit $ CoreInlineAssign level False slot tokens'
 emitILine ICTargZap = emit CoreTargZap
 
-translateITok :: MonadKaos m => InlineCAOSToken Slot -> CoreWriter m CoreToken
+translateITok :: KaosDiagM m => InlineCAOSToken Slot -> CoreWriter m CoreToken
 translateITok (ICVar l at) = do
     slot <- expToCore (ELexical l)
     return $ TokenSlot (SA slot at)
 
 translateITok (ICWord s) = return $ TokenLiteral s
 
-emit :: MonadKaos m => CoreLine () -> CoreWriter m ()
+emit :: KaosDiagM m => CoreLine () -> CoreWriter m ()
 emit x = tell [x]
 
-evalCond :: MonadKaos m => BoolExpr Slot -> CoreWriter m [CoreToken]
+evalCond :: KaosDiagM m => BoolExpr Slot -> CoreWriter m [CoreToken]
 evalCond = fmap condToCore . everywhereM (mkM eval)
     where
-        eval :: MonadKaos m => BoolExpr Slot -> CoreWriter m (BoolExpr Slot)
+        eval :: KaosDiagM m => BoolExpr Slot -> CoreWriter m (BoolExpr Slot)
         eval (BCompare cmp e1 e2) = do
             s1 <- expToCore e1
             s2 <- expToCore e2
@@ -195,7 +196,7 @@ binaryOps' = [
     ("orrv", [intBinOp "orrv" (.|.)])
     ]
 
-expToCore :: MonadKaos m => Expression Slot -> CoreWriter m Slot
+expToCore :: KaosDiagM m => Expression Slot -> CoreWriter m Slot
 expToCore (EConst c) = do
     s <- newSlot $ constType c
     emit $ CoreConst s c

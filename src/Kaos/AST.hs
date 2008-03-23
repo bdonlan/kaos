@@ -24,6 +24,7 @@ module Kaos.AST (
             constType, comparisonToCAOS, BoolExpr(..),
             Comparison(..), AccessType(..),
             InlineCAOSToken(..), InlineCAOSLine(..),
+            KaosContext(..)
             ) where
 
 import Data.List
@@ -82,8 +83,14 @@ instance Show l => Show (Expression l) where
     show (EBoolCast c) = "bcast:" ++ (show c)
     show (EStmt l s) = "stmt:" ++ (show l) ++ ":" ++ show s
 
+data KaosContext = KaosContext  { kcFileName :: String
+                                , kcLineNum  :: Int
+                                }
+                                deriving (Show, Eq, Ord, Data, Typeable)
+
 data Statement l =
     SExpr       (Expression l)
+  | SContext    KaosContext (Statement l)
   | SBlock      [Statement l] 
   | SDoUntil    (BoolExpr l) (Statement l)
   | SUntil      (BoolExpr l) (Statement l)
