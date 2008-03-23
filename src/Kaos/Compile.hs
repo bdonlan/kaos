@@ -158,4 +158,4 @@ seq2lbs = LBS.fromChunks . seq2lbs'
 compile :: [String] -> KaosSource -> IO (Maybe LBS.ByteString)
 compile flags code = do
     finalState <- runKaosM flags $ execStateT (mapM_ compileUnit code) csEmpty
-    return $ Just (seq2lbs $ prepSeq finalState)
+    return (finalState >>= return . seq2lbs . prepSeq)

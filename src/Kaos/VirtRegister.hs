@@ -9,7 +9,7 @@ newtype VirtRegister = VR Int
     deriving (Show, Read, Eq, Ord, Enum, Data, Typeable)
 
 newtype VRegAllocT m a = RT (SeqT VirtRegister m a)
-    deriving (Monad, MonadTrans, MonadKaos)
+    deriving (Monad, MonadTrans, MonadKaos, KaosDiagM)
 
 instance (MonadState s m) => MonadState s (VRegAllocT m) where
     get = lift get
