@@ -84,4 +84,9 @@ define set perm(numeric value, agent a) {
         };
 }
 
-
+define kill(agent a) {
+	_caos {
+		.targ zap;
+		KILL $a(r);
+	};
+}
