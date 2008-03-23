@@ -211,10 +211,12 @@ lexer  = P.makeTokenParser
                               "|","&",
                               ">","<",">=","<=","!=","==",
                               "!",".","=","[","]",".",
-                              "*=", "/=", "+=", "-="]
+                              "*=", "/=", "+=", "-=",
+                              ";"
+                              ]
          , reservedNames   = [
             -- toplevel
-            "install", "remove", "script", "define",
+            "install", "remove", "script", "define", "ovar",
             -- types
             "numeric", "string", "agent", "void", "returning",
             -- everything else
