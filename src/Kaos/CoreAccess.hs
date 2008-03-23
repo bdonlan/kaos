@@ -103,6 +103,7 @@ markLine' (CoreInlineFlush _) = return amEmpty
 markLine' (CoreInlineAssign _ _ dest replacement) = do
     replMap <- markLine' (CoreLine replacement)
     return $ amSingle dest WriteAccess `mappend` replMap
+markLine' CoreTargZap = return amEmpty
 
 baMergeAM :: AccessMap
           -> M.Map Slot AccessType

@@ -64,10 +64,12 @@ data CoreLine t =
 -- shows cause crashes
   | CoreTargReader !Slot Slot (CoreBlock t)
   | CoreTargWriter Slot (CoreBlock t)
+  | CoreTargZap
   -- TODO: CoreCondition, CoreLoop etc
   deriving (Show, Data, Typeable)
 
 instance Functor CoreLine where
+    fmap _ CoreTargZap = CoreTargZap
     fmap _ (CoreLine l) = CoreLine l
     fmap _ (CoreAssign s1 s2) = CoreAssign s1 s2
     fmap _ (CoreConst s cv) = CoreConst s cv
@@ -121,6 +123,7 @@ showLine (CoreInlineAssign level targuser ds repl) =
             = "(targ)"
             | otherwise
             = ""
+showLine CoreTargZap = emitLine "TARGZAP"
 --showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show $ fmap (const ()) x)
 
 showBlock :: Show f => CoreBlock f -> PrettyM ()

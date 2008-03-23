@@ -103,6 +103,8 @@ emitILine (ICLValue level slot tokens) = do
     tokens' <- mapM translateITok tokens
     -- ciaTargUser set later
     emit $ CoreInlineAssign level False slot tokens'
+emitILine ICTargZap = emit CoreTargZap
+
 translateITok :: MonadKaos m => InlineCAOSToken Slot -> CoreWriter m CoreToken
 translateITok (ICVar l at) = do
     slot <- expToCore (ELexical l)

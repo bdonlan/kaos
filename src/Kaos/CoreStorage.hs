@@ -68,6 +68,7 @@ markBlock (CB l) = fmap CB $ mapM enterLine l
 
 markLine :: CoreLine FutureS -> MarkM (CoreLine StorageS)
 markLine l@(CoreNote _) = return $ fmap undefined l
+markLine CoreTargZap = return CoreTargZap
 markLine l@(CoreTouch sa) = do
     markLine $ CoreLine [ TokenSlot sa ]
     return $ fmap undefined l

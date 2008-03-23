@@ -95,6 +95,7 @@ transLine l@(CoreInlineAssign _ _ ds _) = do
     case future of
         Nothing -> return []
         Just _  -> transLine $ inlineFallback l
+transLine CoreTargZap = return []
 
 doAssignType :: CAOSType -> CAOSToken a -> CAOSToken a -> TransM (CAOS a)
 doAssignType t dest src

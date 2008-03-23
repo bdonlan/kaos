@@ -193,6 +193,9 @@ inlineLine (CoreTargWriter destslot block) = do
     block' <- inlineCore block
     modify $ \s -> s { ieGroups = M.filter (not . ieTargUser) (ieGroups s) }
     return $ CoreTargWriter destslot block'
+inlineLine CoreTargZap = do
+    modify $ \s -> s { ieGroups = M.filter (not . ieTargUser) (ieGroups s) }
+    return CoreTargZap
 
 inlineFallback :: CoreLine a -> CoreLine a
 inlineFallback l@(CoreInlineAssign _ _ ds repl) =

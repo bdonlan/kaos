@@ -104,6 +104,7 @@ data InlineCAOSLine l =
   | ICLoop [InlineCAOSLine l]
   | ICKaos (Statement l)
   | ICLValue Int l [InlineCAOSToken l]
+  | ICTargZap
     deriving (Eq, Ord, Data, Typeable)
 
 data InlineCAOSToken l =

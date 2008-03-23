@@ -106,6 +106,7 @@ renameILine (ICLValue _ l tokens) = do
     tokens' <- mapM renameIToken tokens
     level   <- asks rcLevel
     return $ ICLValue level slot tokens'
+renameILine ICTargZap = return ICTargZap
 
 renameIToken :: InlineCAOSToken String -> RenameT (InlineCAOSToken Slot)
 renameIToken (ICVar l at) = do

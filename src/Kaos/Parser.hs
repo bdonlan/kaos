@@ -395,8 +395,18 @@ caosStmt = (caosPragma <|> caosCommand)
 caosPragma :: Parser (InlineCAOSLine String)
 caosPragma = do
     reservedOp "."
-    (caosInlineAssign <|> caosAssign <|> caosTarg <|> caosLoop <|> caosKaos) <?>
-        "inline CAOS directive"
+    (caosInlineAssign   <|>
+     caosAssign         <|>
+     try caosTargZap    <|> 
+     caosTarg           <|>
+     caosLoop           <|>
+     caosKaos)          <?> "inline CAOS directive"
+
+caosTargZap :: Parser (InlineCAOSLine String)
+caosTargZap = do
+    symbol "targ"
+    symbol "zap"
+    return ICTargZap
 
 caosInlineAssign :: Parser (InlineCAOSLine String)
 caosInlineAssign = do
