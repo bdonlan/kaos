@@ -99,6 +99,10 @@ markLine' (CoreTargWriter s body) = do
 
 markLine' (CoreNote _) = return amEmpty
 markLine' (CoreFoldable _ l) = markLine' l
+markLine' (CoreInlineFlush _) = return amEmpty
+markLine' (CoreInlineAssign _ _ dest replacement) = do
+    replMap <- markLine' (CoreLine replacement)
+    return $ amSingle dest WriteAccess `mappend` replMap
 
 baMergeAM :: AccessMap
           -> M.Map Slot AccessType

@@ -92,6 +92,7 @@ data Statement l =
   | SInstBlock  (Statement l)
   | SDeclare    CAOSType [(l, (Maybe (Expression l)))]
   | SIterCall   String [Expression l] [String] (Statement l)
+  | SFlush      Int
     deriving (Eq, Ord, Data, Typeable)
 
 data InlineCAOSLine l =
@@ -102,6 +103,7 @@ data InlineCAOSLine l =
   | ICTargWriter l [InlineCAOSLine l]
   | ICLoop [InlineCAOSLine l]
   | ICKaos (Statement l)
+  | ICLValue Int l [InlineCAOSToken l]
     deriving (Eq, Ord, Data, Typeable)
 
 data InlineCAOSToken l =

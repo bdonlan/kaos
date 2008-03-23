@@ -69,6 +69,7 @@ astToCore' (SInstBlock stmt) = do
     astToCore' stmt
     emit $ CoreLine [TokenLiteral "SLOW"]
 astToCore' (SIterCall _ _ _ _) = fail "late SIterCall"
+astToCore' (SFlush level) = emit $ CoreInlineFlush level
 
 
 emitILine :: MonadKaos m => InlineCAOSLine Slot -> CoreWriter m ()
@@ -98,7 +99,10 @@ emitILine (ICLoop body) = do
     emit $ CoreLoop bodyCore
 
 emitILine (ICKaos st) = astToCore' st
-
+emitILine (ICLValue level slot tokens) = do
+    tokens' <- mapM translateITok tokens
+    -- ciaTargUser set later
+    emit $ CoreInlineAssign level False slot tokens'
 translateITok :: MonadKaos m => InlineCAOSToken Slot -> CoreWriter m CoreToken
 translateITok (ICVar l at) = do
     slot <- expToCore (ELexical l)

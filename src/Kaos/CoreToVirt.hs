@@ -6,6 +6,7 @@ import Kaos.VirtRegister
 import Kaos.Slot
 import Kaos.KaosM
 import Kaos.CAOS
+import Kaos.CoreInline (inlineFallback)
 
 import Kaos.CoreFuture
 import Kaos.CoreStorage
@@ -88,6 +89,12 @@ transLine (CoreLoop body ) = transBlock body
 transLine l@(CoreTargReader _ _ _) = error $ "Impossible: Late targreader: " ++ show l
 transLine l@(CoreTargWriter _ _) = error $ "Impossible: Late targwriter: " ++ show l
 transLine (CoreFoldable _ l) = transLine l
+transLine (CoreInlineFlush _) = return []
+transLine l@(CoreInlineAssign _ _ ds _) = do
+    future <- lookupFuture ds
+    case future of
+        Nothing -> return []
+        Just _  -> transLine $ inlineFallback l
 
 doAssignType :: CAOSType -> CAOSToken a -> CAOSToken a -> TransM (CAOS a)
 doAssignType t dest src
@@ -113,5 +120,4 @@ doAssignType t dest src
         prelude = [CAOSLiteral "TYPE", src]
         makeclause (_, (cond, verb)) =
             (prelude ++ cond, CAOSLine [CAOSLiteral verb, dest, src])
-
 

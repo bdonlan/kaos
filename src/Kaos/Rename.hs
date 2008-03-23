@@ -12,7 +12,17 @@ import Kaos.Toplevel
 
 import Kaos.KaosM
 
-type RenameT = StateT (M.Map String Slot) (ReaderT MacroContext KaosM)
+data ReaderContext = RC { rcMacros :: MacroContext
+                        , rcLevel  :: Int
+                        }
+
+enterMacro :: MacroContext -> RenameT a -> RenameT a
+enterMacro mc = local (\s -> s { rcMacros = mc, rcLevel = succ $ rcLevel s })
+
+getMacro :: String -> RenameT (Maybe Macro)
+getMacro name = fmap ($ name) $ asks rcMacros
+
+type RenameT = StateT (M.Map String Slot) (ReaderT ReaderContext KaosM)
 
 enterBlock :: RenameT a -> RenameT a
 enterBlock m = do
@@ -23,9 +33,11 @@ enterBlock m = do
 
 renameLexicals :: MacroContext -> Statement String -> KaosM (Statement Slot)
 renameLexicals ctx st =
-    runReaderT (evalStateT (renameStatement st) M.empty) ctx
+    runReaderT (evalStateT (renameStatement st) M.empty) (RC ctx 0)
 
 renameStatement :: Statement String -> RenameT (Statement Slot)
+renameStatement (SFlush l) =
+    return $ SFlush l -- this probably shouldn't actually appear
 renameStatement (SDeclare t decls) = fmap (SBlock . concat) $ mapM declOne decls
     where
         declOne (name, ive) = do
@@ -36,7 +48,12 @@ renameStatement (SDeclare t decls) = fmap (SBlock . concat) $ mapM declOne decls
                     let assignment = SExpr (EAssign (ELexical name) e)
                     rv <- renameStatement assignment
                     return [rv]
-renameStatement (SBlock l)      = fmap SBlock $ enterBlock (mapM renameStatement l)
+renameStatement (SBlock ls) = fmap SBlock $ enterBlock (fmap concat $ mapM renameLine ls)
+    where
+        renameLine l = do
+            l' <- renameStatement l
+            lev <- asks rcLevel
+            return [l', SFlush $ succ lev]
 renameStatement (SExpr e)       = fmap SExpr  $ renameExpr e
 renameStatement (SCond c s1 s2) =
     liftM3 SCond (renameCond c) (renameStatement s1) (renameStatement s2)
@@ -47,14 +64,14 @@ renameStatement (SUntil c s) =
 renameStatement (SICaos l) = fmap SICaos $ mapM renameILine l
 renameStatement (SInstBlock s) = liftM SInstBlock $ renameStatement s
 renameStatement (SIterCall name args argNames block) = do
-    macroM <- asks ($("iter:" ++ name))
+    macroM <- getMacro ("iter:" ++ name)
     case macroM of
         Nothing -> fail ("Unknown iterator macro " ++ name)
         Just m  -> do
             when ( (length argNames) /= (length $ miArgTypes $ mbType m)) $
                 fail "Iteree block has the wrong number of arguments"
             lexCtx <- get
-            macroCtx <- ask
+            macroCtx <- asks rcMacros
             let innerArgs = zipWith (\argN typ -> MacroArg argN typ Nothing)
                                     argNames
                                     (miArgTypes $ mbType m)
@@ -84,6 +101,11 @@ renameILine (ICTargWriter vs body) =
     liftM2 ICTargWriter (lex2slot vs) (mapM renameILine body)
 renameILine (ICLoop body) = liftM ICLoop (mapM renameILine body)
 renameILine (ICKaos body) = liftM ICKaos (renameStatement body)
+renameILine (ICLValue _ l tokens) = do
+    slot    <- lex2slot l
+    tokens' <- mapM renameIToken tokens
+    level   <- asks rcLevel
+    return $ ICLValue level slot tokens'
 
 renameIToken :: InlineCAOSToken String -> RenameT (InlineCAOSToken Slot)
 renameIToken (ICVar l at) = do
@@ -105,7 +127,7 @@ renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
 
 --renameExpr (ECall s e) = fmap (ECall s) $ mapM renameExpr e
 renameExpr (ECall name e) = do
-    macroM <- asks ($name)
+    macroM <- getMacro name
     case macroM of
         Nothing -> do
             e' <- mapM renameExpr e
@@ -122,7 +144,7 @@ renameMacro macro e = do
     oldMap <- get
     put $ newMap
     registerVar (mbRetType macro) "_return"
-    inner <- local (const $ mbContext macro) $ renameStatement $ (SBlock $ iprefix ++ [mbCode macro])
+    inner <- enterMacro (mbContext macro) $ renameStatement $ (SBlock $ iprefix ++ [mbCode macro])
     newMap' <- get
     put oldMap
     return $ EStmt (M.lookup "_return" newMap') (SBlock (oprefix ++ [inner]))

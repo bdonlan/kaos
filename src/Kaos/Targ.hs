@@ -1,4 +1,4 @@
-module Kaos.Targ (targExpand) where
+module Kaos.Targ (targExpand, stripTarg) where
 
 --import Control.Monad (guard)
 import Control.Monad.Cont
@@ -36,8 +36,6 @@ targExpand d = return (fmap (const ()) d)
            >>= mergeAdjacent
            >>= debugDumpCore "dump-targ-merged"
            >>= (return . (fmap (const ())))
-           >>= stripTarg
-           >>= debugDumpCore "dump-targ-strip"
 
 tagTempSlots :: Core () -> KaosM (Core ())
 tagTempSlots = everywhereM (mkM tagLine)

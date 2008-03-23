@@ -23,6 +23,7 @@ import Kaos.Emit
 import Kaos.Targ
 import Kaos.ASTTransforms
 import Kaos.Toplevel
+import Kaos.CoreInline
 import Kaos.KaosM
 
 dumpFlagged :: String -> (t -> String) -> t -> KaosM t
@@ -49,10 +50,14 @@ compileCode' ctx parses =
     postRenameTransforms                    >>=
     astToCore                               >>=
     dumpFlagged "dump-early-core" dumpCore  >>=
-    targExpand                              >>=
-    dumpFlagged "dump-final-core" dumpCore  >>=
     unlessSet "no-folding" performFolding   >>=
     dumpFlagged "dump-folded-core" dumpCore >>=
+    inlineAnalysis                          >>=
+    unlessSet "no-targ-expand" targExpand   >>=
+    unlessSet "no-inline" inlineValues      >>=
+    dumpFlagged "dump-inlined-core" dumpCore>>=
+    stripTarg                               >>=
+    dumpFlagged "dump-final-core" dumpCore  >>=
     markAccess                              >>=
     dumpFlagged "dump-access-core" dumpCore >>=
     markFuture                              >>=

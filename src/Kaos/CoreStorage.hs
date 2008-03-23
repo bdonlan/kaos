@@ -14,6 +14,7 @@ import Kaos.VirtRegister
 import Kaos.AST
 import Control.Monad.Reader
 import Kaos.Dump
+import Kaos.CoreInline (inlineFallback)
 
 import qualified Data.Map as M
 
@@ -199,3 +200,8 @@ markLine (CoreTargWriter slot body) = do
     body' <- markBlock body
     markLine (CoreLine [TokenSlot (SA slot WriteAccess)])
     return $ CoreTargWriter slot body'
+
+markLine (CoreInlineFlush l) = return $ CoreInlineFlush l
+markLine l@(CoreInlineAssign level targUser dest repl) = do
+    markLine $ inlineFallback l
+    return $ CoreInlineAssign level targUser dest repl

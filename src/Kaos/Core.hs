@@ -44,6 +44,13 @@ instance Show Folder where show _ = "(...)"
 data CoreLine t =
     CoreLine [CoreToken]
   | CoreAssign Slot Slot -- dest src
+  | CoreInlineAssign
+        { ciaLevel       :: Int
+        , ciaTargUser    :: Bool
+        , ciaDestSlot    :: Slot
+        , ciaReplacement :: [CoreToken]
+        }
+  | CoreInlineFlush Int
   | CoreConst  Slot ConstValue
   | CoreNote   Note
   | CoreTouch  (GenAccess Slot)
@@ -66,6 +73,9 @@ instance Functor CoreLine where
     fmap _ (CoreConst s cv) = CoreConst s cv
     fmap _ (CoreNote n) = CoreNote n
     fmap _ (CoreTouch s) = CoreTouch s
+    fmap _ (CoreInlineFlush l) = CoreInlineFlush l
+    fmap _ (CoreInlineAssign level targuser ds repl) =
+        CoreInlineAssign level targuser ds repl
     fmap f (CoreTargReader ts s b) = CoreTargReader ts s (fmap f b)
     fmap f (CoreTargWriter s b) = CoreTargWriter s (fmap f b)
     fmap f (CoreCond cond if_ else_) =
@@ -101,6 +111,16 @@ showLine (CoreTargWriter slot body) = prefixFirst ("TARG ") $ do
     emitLine $ "> " ++ (show slot)
     showBlock body
 showLine (CoreFoldable _ body) = prefixFirst ("FOLD ") $ showLine body
+showLine (CoreInlineFlush level) = emitLine $ "FLUSH " ++ (show level) ++ "+"
+showLine (CoreInlineAssign level targuser ds repl) =
+    emitLine $ "INLINESET @" ++ (show level) ++ targstr ++ " " ++ (show ds) ++ " = " ++ 
+                (unwords $ map show repl)
+    where
+        targstr
+            | targuser
+            = "(targ)"
+            | otherwise
+            = ""
 --showLine x = prefixFirst "XXX UNCODED SHOWLINE " $ emitLine (show $ fmap (const ()) x)
 
 showBlock :: Show f => CoreBlock f -> PrettyM ()
@@ -152,6 +172,7 @@ class LineAccess t where
     getLineAccess :: t -> AccessMap
 
 instance LineAccess AccessMap where getLineAccess = id
+instance LineAccess t => LineAccess (a, t) where getLineAccess = getLineAccess . snd
 
 lineAccess :: LineAccess t => (CoreLine t, t) -> AccessMap
 lineAccess  = getLineAccess . snd
