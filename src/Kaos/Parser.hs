@@ -53,6 +53,29 @@ kaosUnit =  (installScript <?> "install script")
         <|> (removeScript  <?> "removal script")
         <|> (macroBlock    <?> "macro definition")
         <|> (agentScript   <?> "normal script")
+        <|> (ovdecl        <?> "object variable declaration")
+        <|> (nullOp)
+
+nullOp :: Parser KaosUnit
+nullOp = do
+    reservedOp ";"
+    return $ InstallScript (SBlock [])
+
+ovdecl :: Parser KaosUnit
+ovdecl = do
+    reserved "ovar"
+    t <- typeName
+    name <- identifier
+    idx <- option Nothing $ fmap Just idxM
+    return $ OVDecl name idx t
+    where
+        idxM :: Parser Int
+        idxM = do
+            reservedOp "["
+            n <- fmap fromIntegral natural
+            reservedOp "]"
+            return n
+
 
 installScript :: Parser KaosUnit
 installScript = reserved "install" >> liftM InstallScript (braces bareBlock)

@@ -8,6 +8,7 @@ import qualified Data.Sequence as S
 import qualified Data.Map as M
 import Data.Sequence ( (|>), (><), ViewL(..) )
 import Data.ByteString.Char8 (ByteString)
+import Data.Maybe
 
 import Kaos.AST
 import Kaos.ASTToCore
@@ -25,6 +26,7 @@ import Kaos.ASTTransforms
 import Kaos.Toplevel
 import Kaos.CoreInline
 import Kaos.KaosM
+
 
 dumpFlagged :: String -> (t -> String) -> t -> KaosM t
 dumpFlagged flag f v = do
@@ -72,10 +74,11 @@ data CompileState = CS  { csInstallBuffer   :: S.Seq ByteString
                         , csScriptBuffer    :: S.Seq ByteString
                         , csRemoveBuffer    :: S.Seq ByteString
                         , csDefinedMacros   :: M.Map String Macro
+                        , csOVIdx           :: Int
                         }
 type CompileM = StateT CompileState KaosM
 csEmpty :: CompileState
-csEmpty = CS S.empty S.empty S.empty M.empty
+csEmpty = CS S.empty S.empty S.empty M.empty 0
 
 
 emitInstall :: String -> CompileM ()
@@ -97,6 +100,44 @@ compileUnit (AgentScript fmly gnus spcs scrp code) = do
                  (show spcs) ++ " " ++ (show scrp) ++ "\n"
     compileCode code >>= emitScript
     emitScript "ENDM\n"
+compileUnit OVDecl{ ovName = name, ovIndex = Just idx, ovType = t }
+    | idx < 0 || idx > 99
+    = fail $ "Object variable index " ++ show idx ++ " is out of range"
+    | otherwise
+    = do
+        let atok   = [ICWord "AVAR", ICVar "o" ReadAccess, ICWord $ show idx]
+        let setter = [ICWord verb] ++ atok ++ [ICVar "v" ReadAccess]
+        let getMacro = defaultMacro { mbName    = name
+                                    , mbType    = MacroRValue
+                                    , mbRetType = t
+                                    , mbArgs    = [MacroArg "o" typeObj Nothing]
+                                    , mbCode    = SICaos [ICLValue minBound "_return" atok]
+                                    }
+        let setMacro = defaultMacro { mbName    = "set:" ++ name
+                                    , mbType    = MacroLValue
+                                    , mbRetType = typeVoid
+                                    , mbArgs    = [MacroArg "v" t Nothing, MacroArg "o" typeObj Nothing]
+                                    , mbCode    = SICaos [ICLine setter]
+                                    }
+        compileUnit $ MacroBlock getMacro
+        compileUnit $ MacroBlock setMacro
+    where
+        verb
+            | t == typeNum
+            = "SETV"
+            | t == typeStr
+            = "SETS"
+            | t == typeObj
+            = "SETA"
+            | otherwise
+            = error "Bad type for object variable definition"
+compileUnit d@OVDecl{} = do
+    s <- get
+    let idx = csOVIdx s
+    put $ s { csOVIdx = succ idx }
+    when (idx >= 100) $ fail "Out of object variable indexes; specify some explicitly"
+    compileUnit $ d { ovIndex = Just idx }
+
 compileUnit (MacroBlock macro) = do
     s <- get
     let inCtx = macro { mbContext = flip M.lookup (csDefinedMacros s) }

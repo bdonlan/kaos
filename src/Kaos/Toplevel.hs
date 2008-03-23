@@ -55,6 +55,10 @@ type MacroContext = String -> Maybe Macro
 data KaosUnit = InstallScript (Statement String)
               | MacroBlock  Macro
               | RemoveScript (Statement String)
+              | OVDecl      { ovName    :: String
+                            , ovIndex   :: Maybe Int
+                            , ovType    :: CAOSType
+                            }
               | AgentScript { asFamily  :: !Word8
                             , asGenus   :: !Word8
                             , asSpecies :: !Word16
