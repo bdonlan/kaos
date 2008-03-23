@@ -51,6 +51,7 @@ compileCode' ctx parses =
     astToCore                               >>=
     dumpFlagged "dump-early-core" dumpCore  >>=
     unlessSet "no-folding" performFolding   >>=
+    stripFolds                              >>=
     dumpFlagged "dump-folded-core" dumpCore >>=
     inlineAnalysis                          >>=
     unlessSet "no-targ-expand" targExpand   >>=

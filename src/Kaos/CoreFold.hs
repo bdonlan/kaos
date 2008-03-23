@@ -1,4 +1,4 @@
-module Kaos.CoreFold (performFolding) where
+module Kaos.CoreFold (performFolding, stripFolds) where
 
 import Control.Monad.State
 
@@ -9,6 +9,7 @@ import Kaos.Core
 import Kaos.CoreAccess
 import Kaos.KaosM
 import Kaos.Slot
+import Data.Generics
 import qualified Kaos.AliasMap as AM
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
@@ -106,3 +107,10 @@ foldLine line am = do
     let am' = getAM am
     mapM_ (modifySM . AM.remove . fst) . filter ((> ReadAccess).snd) . M.toList $ am'
     return [fmap (const ()) line]
+
+stripFolds :: Core () -> KaosM (Core ())
+stripFolds = return . everywhere (mkT stripLine)
+    where
+        stripLine :: CoreLine () -> CoreLine ()
+        stripLine (CoreFoldable _ l) = l
+        stripLine l = l
