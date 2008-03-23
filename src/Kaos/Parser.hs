@@ -206,7 +206,7 @@ expr    = buildExpressionParser table factor
 
 table :: [[Operator Char () (Expression String)]]
 table   = [[Prefix (do { reservedOp "!"; return $ EBoolCast . BNot . BExpr})]
-          ,[Postfix objCall]
+          ,[Postfix $ try objCall <|> bareCall]
           ,[op "*" "mulv" AssocLeft, op "/" "divv" AssocLeft]
           ,[op "&" "andv" AssocLeft, op "|" "orrv" AssocLeft]
           ,[op "+" "addv" AssocLeft, op "-" "subv" AssocLeft]
@@ -222,6 +222,10 @@ table   = [[Prefix (do { reservedOp "!"; return $ EBoolCast . BNot . BExpr})]
             reservedOp "."
             (ECall name args) <- funcCall
             return $ \obj -> ECall name (obj:args)
+          bareCall = do
+            reservedOp "."
+            name <- identifier
+            return $ \obj -> ECall name [obj]
 
           op s f assoc
              = Infix (do{ reservedOp s; return $ EBinaryOp f } <?> "operator") assoc
