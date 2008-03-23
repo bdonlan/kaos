@@ -80,9 +80,9 @@ expandForward = return . everywhere' (mkT expandOne)
             | usesTarg line
             = p
         expandOne ((CoreTargReader ts s (CB blk), ()):lp:ls)
-            = expandOne $ (CoreTargReader ts s (CB (blk ++ [lp])), ()):ls
+            = (CoreTargReader ts s (CB (blk ++ [lp])), ()):ls
         expandOne ((CoreTargWriter s (CB blk), ()):lp:ls)
-            = expandOne $ (CoreTargWriter s (CB (blk ++ [lp])), ()):ls
+            = (CoreTargWriter s (CB (blk ++ [lp])), ()):ls
         expandOne p = p
 
 expandBackward :: Core AccessMap -> KaosM (Core AccessMap)
