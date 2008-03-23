@@ -145,10 +145,16 @@ withOutputFile :: String -> (Handle -> IO a) -> IO a
 withOutputFile "-" m = m stdout
 withOutputFile file m = withFile file WriteMode m
 
+loadPrelude :: Settings -> IO [KaosUnit]
+loadPrelude s = do
+    if "no-implicit-prelude" `elem` debugFlags s
+        then return []
+        else parseString "(internal prelude)" preludeStr
+
 doCompile :: Settings -> IO ()
 doCompile s = do
     when ((length $ sourceFiles s) == 0) $ fail "No source files"
-    prelude <- parseString "(internal prelude)" preludeStr
+    prelude <- loadPrelude s
     parses <- mapM parseFile (sourceFiles s)
     let merged = concat (prelude:parses)
     result <- compile (debugFlags s) merged
