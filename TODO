@@ -1,11 +1,11 @@
 * More useful error reporting
-* Allow macros to define inlinable lvalues and rvalues
-  - pure/impure/idempotent
-  - validity, initially statement scope
-* Debug TARG a bit
 * More prelude definitions
 (preview release?)
 * Final regalloc stage
 * Compound types - user defined?
   - parts
 (alpha release?)
+
+eventually(?):
+
+* Allow macros to define inlinable rvalues (impure/idempotent)
