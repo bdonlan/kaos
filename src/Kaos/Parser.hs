@@ -395,7 +395,17 @@ caosStmt = (caosPragma <|> caosCommand)
 caosPragma :: Parser (InlineCAOSLine String)
 caosPragma = do
     reservedOp "."
-    (caosAssign <|> caosTarg <|> caosLoop <|> caosKaos) <?> "inline CAOS directive"
+    (caosInlineAssign <|> caosAssign <|> caosTarg <|> caosLoop <|> caosKaos) <?>
+        "inline CAOS directive"
+
+caosInlineAssign :: Parser (InlineCAOSLine String)
+caosInlineAssign = do
+    try $ symbol "inline"
+    symbol "let"
+    v1 <- caosVarName
+    symbol "="
+    repl <- many caosWord
+    return $ ICLValue minBound v1 repl
 
 caosKaos :: Parser (InlineCAOSLine String)
 caosKaos = do
