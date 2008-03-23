@@ -53,7 +53,7 @@ renameStatement (SDeclare t decls) = fmap (SBlock . concat) $ mapM declOne decls
 renameStatement (SBlock ls) = fmap SBlock $ enterBlock (fmap concat $ mapM renameLine ls)
     where
         renameLine l = do
-            l' <- renameStatement l
+            l' <- checkpoint (SBlock []) $ renameStatement l
             lev <- asks rcLevel
             return [l', SFlush $ succ lev]
 renameStatement (SExpr e)       = fmap SExpr  $ renameExpr e
