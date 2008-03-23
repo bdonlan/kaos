@@ -54,8 +54,10 @@ compileCode' ctx parses = return parses     >>=
     preRenameTransforms                     >>=
     dumpFlagged "dump-ast" dumpStmt         >>=
     renameLexicals ctx                      >>=
+    commitFail                              >>=
     postRenameTransforms                    >>=
     astToCore                               >>=
+    commitFail                              >>=
     dumpFlagged "dump-early-core" dumpCore  >>=
     unlessSet "no-folding" performFolding   >>=
     stripFolds                              >>=
@@ -66,13 +68,16 @@ compileCode' ctx parses = return parses     >>=
     dumpFlagged "dump-final-targ" dumpCore  >>=
     unlessSet "no-inline" inlineValues      >>=
     dumpFlagged "dump-final-core" dumpCore  >>=
+    commitFail                              >>=
     markAccess                              >>=
     dumpFlagged "dump-access-core" dumpCore >>=
     markFuture                              >>=
     markStorage                             >>=
     dumpFlagged "dump-marked-core" dumpCore >>=
     coreToVirt                              >>=
+    commitFail                              >>=
     regAlloc                                >>=
+    commitFail                              >>=
     return . emitCaos
 
 data CompileState = CS  { csInstallBuffer   :: S.Seq ByteString

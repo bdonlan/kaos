@@ -1,7 +1,7 @@
 module Kaos.KaosM (runKaosM, KaosM, newSlot, debugKM, MonadKaos(..),
                   isSet, whenSet, debugDump, KaosDiag,
                   internalError, compileError, warning, KaosDiagM(..),
-                  putCtx, getCtx, context
+                  putCtx, getCtx, context, commitFail
                   ) where
 
 import Kaos.SeqT
@@ -182,3 +182,10 @@ runKaosM flags m = do
             printDiag diag
             return Nothing
         Right ret -> return ret
+
+commitFail :: v -> KaosM v
+commitFail v = KM $ do
+    s <- get
+    when (kFailed s) $ throwError noMsg
+    return v
+
