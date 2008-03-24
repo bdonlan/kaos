@@ -189,7 +189,8 @@ registerVar :: CAOSType -> String -> RenameT Slot
 registerVar t name = do
     s <- get
     slot <- lift $ newSlot t
-    put $ M.insert name slot s
+    let slot' = slot { slotName = Just name }
+    put $ M.insert name slot' s
     return slot
 
 renameCond :: BoolExpr String -> RenameT (BoolExpr Slot)

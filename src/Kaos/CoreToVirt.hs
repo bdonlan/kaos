@@ -31,7 +31,7 @@ transBlock :: CoreBlock StorageS -> TransM (CAOSBlock VirtRegister)
 transBlock (CB l) = saveCtx $ fmap concat $ mapM transLine_ l
     where
         transLine_ :: (CoreLine StorageS, StorageS) -> TransM [CAOSLine VirtRegister]
-        transLine_ (line, env) = local (const env) (transLine line)
+        transLine_ (line, env) = checkpoint [] $ local (const env) (transLine line)
 
 transLine :: CoreLine StorageS -> TransM [CAOSLine VirtRegister]
 transLine (CoreNote (ContextNote ctx)) = do
@@ -45,11 +45,12 @@ transLine line@(CoreLine l) = do
     where
         transToken (TokenLiteral ts) = return $ CAOSLiteral ts
         transToken (TokenConst c) = return $ CAOSConst c
-        transToken (TokenSlot (SA slot _)) = lookupStorage slot >>= transStorage
-        transStorage (Just (Private r)) = return $ CAOSRegister r
-        transStorage (Just (Shared r)) = return $ CAOSRegister r
-        transStorage (Just (Const c)) = return $ CAOSConst c
-        transStorage _ = fail $ "transLine: register storage in bad state: " ++ show line
+        transToken (TokenSlot (SA slot _)) = lookupStorage slot >>= transStorage slot
+        transStorage _ (Just (Private r)) = return $ CAOSRegister r
+        transStorage _ (Just (Shared r)) = return $ CAOSRegister r
+        transStorage _ (Just (Const c)) = return $ CAOSConst c
+        transStorage s Nothing = uninitialized s
+        transStorage _ _ = fail $ "transLine: register storage in bad state: " ++ show line
 transLine (CoreConst slot c) = lookupStorage slot >>= checkAssign
     where
         checkAssign (Just (Private r)) = doAssign r
@@ -64,6 +65,7 @@ transLine l@(CoreAssign dest src) = do
     srcFuture   <- lookupFuture  src
     checkAssign destStorage destFuture srcStorage srcFuture
     where
+        checkAssign _ _ Nothing _ = uninitialized src
         checkAssign _ _ _ Nothing = return [] -- rename
         checkAssign (Just (Shared _)) _ _ _ = return [] -- alias
         checkAssign _ Nothing _ _ = return [] -- unused
@@ -125,3 +127,8 @@ doAssignType t dest src
         makeclause (_, (cond, verb)) =
             (prelude ++ cond, CAOSLine [CAOSLiteral verb, dest, src])
 
+uninitialized :: Slot -> TransM a
+uninitialized Slot{slotName = Just name} =
+    compileError $ "Uninitialized variable `" ++ name ++ "'"
+uninitialized slot =
+    internalError $ "Uninitialized slot " ++ (show slot)

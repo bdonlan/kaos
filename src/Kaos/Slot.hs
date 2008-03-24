@@ -5,7 +5,7 @@ import Data.Ord
 import Data.Generics
 
 data Slot = Slot { slotId :: Int
-                 , slotTrace :: Maybe () -- TODO
+                 , slotName :: Maybe String
                  , slotType :: CAOSType
                  } deriving (Data, Typeable)
 
