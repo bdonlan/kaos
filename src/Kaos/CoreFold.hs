@@ -25,7 +25,7 @@ initState :: AliasState
 initState = AS False AM.empty
 
 getSM :: AliasM (AM.GroupMap Slot Value)
-getSM = liftM asSlotMap get
+getSM = gets asSlotMap
 
 modifySM :: (AM.GroupMap Slot Value -> AM.GroupMap Slot Value) -> AliasM ()
 modifySM f = modify $ \s -> s { asSlotMap = f $ asSlotMap s }
