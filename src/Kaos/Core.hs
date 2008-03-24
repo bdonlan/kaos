@@ -18,6 +18,7 @@ import Data.Char
 import Data.Monoid
 
 data Note = PrivateNote String
+          | ContextNote KaosContext
         deriving (Show, Eq, Ord, Typeable, Data)
 
 data CoreToken =

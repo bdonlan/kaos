@@ -10,7 +10,16 @@ import Data.Maybe
 import Data.Bits
 import qualified Data.Map as M
 
-type CoreWriter m a = WriterT [CoreLine ()] m a
+newtype CoreWriter m a = CW { unCW :: WriterT [CoreLine ()] m a }
+    deriving (Monad, MonadKaos, KaosDiagM, Functor)
+
+instance KaosDiagM m => MonadWriter [CoreLine ()] (CoreWriter m) where
+    tell m = CW $ do
+        ctx <- getCtx
+        when (isJust ctx) $ tell [CoreNote $ ContextNote (fromJust ctx)]
+        tell m
+    listen = CW . listen . unCW
+    pass = CW . pass . unCW
 
 typeIs :: Monad m => Slot -> CAOSType -> m ()
 typeIs (Slot _ _ ct') ct
@@ -31,7 +40,7 @@ unitBlock = CB . map (\line -> (line, ()))
 
 astToCore :: KaosDiagM m => Statement Slot -> m (Core ())
 astToCore ast = do
-    ((), ls) <- runWriterT $ astToCore' ast
+    ((), ls) <- runWriterT $ unCW (astToCore' ast)
     return $ unitBlock (ls :: [CoreLine ()])
 
 astToCore' :: KaosDiagM m => Statement Slot -> CoreWriter m ()
