@@ -21,14 +21,14 @@ instance KaosDiagM m => MonadWriter [CoreLine ()] (CoreWriter m) where
     listen = CW . listen . unCW
     pass = CW . pass . unCW
 
-typeIs :: Monad m => Slot -> CAOSType -> m ()
+typeIs :: KaosDiagM m => Slot -> CAOSType -> m ()
 typeIs (Slot _ _ ct') ct
     | ct `typeMatches` ct'
     = return ()
     | otherwise
-    = fail "Type mismatch"
+    = compileError "Type mismatch"
 
-sameType :: Monad m => Slot -> Slot -> m ()
+sameType :: KaosDiagM m => Slot -> Slot -> m ()
 sameType s1 s2 = typeIs s1 (slotType s2)
 
 captureBlock :: KaosDiagM m => CoreWriter m x -> CoreWriter m (CoreBlock ())
@@ -218,7 +218,7 @@ expToCore (EBinaryOp opName e1 e2) = do
     let t2 = slotType s2
     op <- M.lookup opName binaryOps -- shouldn't fail
     case M.lookup (t1, t2) op of
-        Nothing -> fail "Type mismatch in binary operation"
+        Nothing -> compileError "Type mismatch in binary operation"
         Just (BO caosTok retType folderF) -> do
             dest <- newSlot retType
             emit $ CoreAssign dest s1
@@ -250,13 +250,13 @@ expToCore (ECall "print" (x:xs)) = do
             | t == typeStr
             = return "outs"
             | otherwise
-            = fail "Bad type for print"
+            = compileError "Bad type for print"
 expToCore (ECall "__touch" [e]) = do
     s <- expToCore e
     emit $ CoreTouch (SA s MutateAccess)
     return s
 
-expToCore (ECall s _) = fail $ "Unknown macro or builtin " ++ show s
+expToCore (ECall s _) = compileError $ "Unknown macro or builtin " ++ show s
 
 expToCore (EBoolCast c) = do
     c' <- evalCond c
