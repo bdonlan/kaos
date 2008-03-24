@@ -65,7 +65,7 @@ transLine l@(CoreAssign dest src) = do
     srcFuture   <- lookupFuture  src
     checkAssign destStorage destFuture srcStorage srcFuture
     where
-        checkAssign _ _ Nothing _ = uninitialized src
+        checkAssign Nothing (Just _) Nothing _ = uninitialized src
         checkAssign _ _ _ Nothing = return [] -- rename
         checkAssign (Just (Shared _)) _ _ _ = return [] -- alias
         checkAssign _ Nothing _ _ = return [] -- unused
