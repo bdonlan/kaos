@@ -105,7 +105,7 @@ parseShortArgs s ('d':[]) (flag:remain) =
 parseShortArgs _ (x:_) _ = fail $ "Unknown short argument -" ++ [x]
 
 versionStr :: String
-versionStr = "HaKaos v0.0"
+versionStr = "Kaos v0.0"
 helpStr :: String
 helpStr = unlines $ versionStr:
     ["Usage: kaos [-o file] [--help] [--version] file [...]"
