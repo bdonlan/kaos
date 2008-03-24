@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-monomorphism-restriction #-}
 module Kaos.ASTTransforms (preRenameTransforms, postRenameTransforms) where
 
 -- Misc AST transforms
