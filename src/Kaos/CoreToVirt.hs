@@ -28,12 +28,15 @@ coreToVirt :: Core StorageS -> KaosM (CAOS VirtRegister)
 coreToVirt b = runReaderT (transBlock b) undefined
 
 transBlock :: CoreBlock StorageS -> TransM (CAOSBlock VirtRegister)
-transBlock (CB l) = fmap concat $ mapM transLine_ l
+transBlock (CB l) = saveCtx $ fmap concat $ mapM transLine_ l
     where
         transLine_ :: (CoreLine StorageS, StorageS) -> TransM [CAOSLine VirtRegister]
         transLine_ (line, env) = local (const env) (transLine line)
 
 transLine :: CoreLine StorageS -> TransM [CAOSLine VirtRegister]
+transLine (CoreNote (ContextNote ctx)) = do
+    putCtx $ Just ctx
+    return []
 transLine (CoreNote _) = return []
 transLine (CoreTouch _) = return []
 transLine line@(CoreLine l) = do
