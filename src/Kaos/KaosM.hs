@@ -139,7 +139,7 @@ saveCtx' m = do
     return r
 
 kmCheckpoint :: a -> KaosM a -> KaosM a
-kmCheckpoint dummyVal (KM m) = KM $ saveCtx' $ catchError m report
+kmCheckpoint dummyVal (KM m) = KM $ catchError m report
     where
         report err = do
             s <- get
