@@ -56,7 +56,7 @@ markStorage :: Core FutureS -> KaosM (Core StorageS)
 markStorage = runVRegAllocT . flip evalStateT M.empty . flip runReaderT undefined . markBlock
 
 markBlock :: Core FutureS -> MarkM (Core StorageS)
-markBlock (CB l) = fmap CB $ mapM enterLine l
+markBlock (CB l) = saveCtx $ fmap CB $ mapM enterLine l
     where
         enterLine :: (CoreLine FutureS, FutureS) -> MarkM (CoreLine StorageS, StorageS)
         enterLine (line, future) = do
@@ -67,6 +67,9 @@ markBlock (CB l) = fmap CB $ mapM enterLine l
             return (line', StorageS storage future)
 
 markLine :: CoreLine FutureS -> MarkM (CoreLine StorageS)
+markLine l@(CoreNote (ContextNote ctx)) = do
+    putCtx $ Just ctx
+    return $ fmap undefined l
 markLine l@(CoreNote _) = return $ fmap undefined l
 markLine CoreTargZap = return CoreTargZap
 markLine l@(CoreTouch sa) = do
