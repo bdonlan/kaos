@@ -221,7 +221,9 @@ lexer  = P.makeTokenParser
             -- everything else
             "if", "else", "do", "until", "while", "for", "_caos", "_inst"]
          , caseSensitive   = True
-         , commentLine     = "#"
+         , commentLine     = "//"
+         , commentStart    = "/*"
+         , commentEnd      = "*/"
          })
 
 expr :: Parser (Expression String)

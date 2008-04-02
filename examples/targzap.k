@@ -14,7 +14,7 @@ define badkill(agent a) {
 
 define bar(numeric n) {
 	kill(norn());
-#	badkill(norn());
+//	badkill(norn());
 	print(n);
 }
 
