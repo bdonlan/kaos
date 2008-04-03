@@ -138,20 +138,16 @@ renameExpr :: (Expression String) -> RenameT (Expression Slot)
 renameExpr (EConst c) = return $ EConst c
 renameExpr (EBinaryOp s e1 e2) =
     liftM2 (EBinaryOp s) (renameExpr e1) (renameExpr e2)
-renameExpr (EAssign e1@(ELexical _) e2) =
-    liftM2 EAssign (renameExpr e1) (renameExpr e2)
+renameExpr (EAssign (ELexical l) e2) =
+    lexSwitch l "set:" (\s -> liftM (EAssign $ ELexical s) (renameExpr e2))
+                       (\c -> renameExpr (EAssign c e2))
 renameExpr (EAssign (ECall name e) e2) =
     renameExpr (ECall ("set:" ++ name) (e2:e))
 renameExpr (EAssign e _) = compileError $ "Not an LValue: " ++ (show e)
-renameExpr (ELexical l) = do
-    r <- lex2slot' l
-    case r of
-        Just s -> return $ ELexical s
-        Nothing -> do
-            m <- getMacro l
-            case m of 
-                Just (Macro{mbArgs = []}) -> renameExpr (ECall l [])
-                _ -> notInScope l
+renameExpr (ELexical l) =
+    lexSwitch l "" (return . ELexical) renameExpr
+
+
 renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
 
 --renameExpr (ECall s e) = fmap (ECall s) $ mapM renameExpr e
@@ -163,6 +159,21 @@ renameExpr (ECall name e) = do
             return $ ECall name e'
         Just  m -> renameMacro m e
 renameExpr (EStmt result code) = liftM2 EStmt (liftMaybe lex2slot result) (renameStatement code)
+
+lexSwitch :: String
+          -> String
+          -> (Slot -> RenameT a)
+          -> (Expression String -> RenameT a)
+          -> RenameT a
+lexSwitch l prefix ifLex ifMacro = do
+    r <- lex2slot' l
+    case r of
+        Just s -> ifLex s
+        Nothing -> do
+            m <- getMacro $ prefix ++ l
+            case m of 
+                Just (Macro{}) -> ifMacro (ECall l [])
+                _ -> notInScope l
 
 renameMacro :: Macro -> [Expression String] -> RenameT (Expression Slot)
 renameMacro macro e = do
