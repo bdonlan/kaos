@@ -322,9 +322,9 @@ ifstmt :: Parser (Statement String)
 ifstmt = do
     reserved "if"
     cond <- parens $ fmap BExpr expr
-    block1 <- fmap SBlock $ braces $ many statement
-    block2 <- fmap SBlock $ [] `option`
-                            (reserved "else" >> (braces $ many statement))
+    block1 <- statement
+    block2 <- SBlock [] `option`
+                            (reserved "else" >> statement)
     return $ SCond cond block1 block2
 
 dostmt :: Parser (Statement String)
@@ -405,6 +405,7 @@ statement' = inlineCAOS
         <|> whileuntil
         <|> instblock
         <|> forloop
+        <|> liftM SBlock (braces $ many statement)
         <|> nullStatement
         <?> "statement"
 
