@@ -143,7 +143,15 @@ renameExpr (EAssign e1@(ELexical _) e2) =
 renameExpr (EAssign (ECall name e) e2) =
     renameExpr (ECall ("set:" ++ name) (e2:e))
 renameExpr (EAssign e _) = compileError $ "Not an LValue: " ++ (show e)
-renameExpr (ELexical l) = fmap ELexical $ lex2slot l
+renameExpr (ELexical l) = do
+    r <- lex2slot' l
+    case r of
+        Just s -> return $ ELexical s
+        Nothing -> do
+            m <- getMacro l
+            case m of 
+                Just (Macro{mbArgs = []}) -> renameExpr (ECall l [])
+                _ -> notInScope l
 renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
 
 --renameExpr (ECall s e) = fmap (ECall s) $ mapM renameExpr e
@@ -196,12 +204,20 @@ liftMaybe :: Monad m => (a -> m b) -> Maybe a -> m (Maybe b)
 liftMaybe _ Nothing  = return Nothing
 liftMaybe f (Just v) = liftM Just $ f v 
 
+lex2slot' :: String -> RenameT (Maybe Slot)
+lex2slot' l = do
+    s <- get
+    return $ M.lookup l s
+
 lex2slot :: String -> RenameT Slot
 lex2slot l = do
-    s <- get
-    case M.lookup l s of
+    r <- lex2slot' l
+    case r of
         Just v -> return v
-        Nothing -> compileError $ "Variable not in scope: " ++ show l
+        Nothing -> notInScope l
+
+notInScope :: String -> RenameT a
+notInScope = compileError . ("Variable not in scope: " ++)
 
 registerVar :: CAOSType -> String -> RenameT Slot
 registerVar t name = do
