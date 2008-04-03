@@ -5,6 +5,7 @@
 > import System.Directory
 > import Data.List
 > import Control.Monad
+> import System.Time (ClockTime)
 
 > heads = unfoldr step . Just
 >    where
@@ -12,7 +13,7 @@
 >       step (Just [])      = Just ([], Nothing)
 >       step (Just (x:xs))  = Just (x, Just xs)
 
-> preludeSrc  = "src/prelude.k"
+> preludeSrcDir	= "prelude"
 > preludePath = "gen/Kaos/Prelude.hs"
 > preludeDir  = fst $ splitFileName preludePath
 > preludeDirs = reverse $ map combine $ heads $ splitPath preludeDir
@@ -27,19 +28,32 @@
 > checkPreludeDirs = createDirectoryIfMissing True preludeDir
 > cleanPrelude = removeDirectoryRecursive "gen"
 
+> loadPreludeSource :: IO (String, ClockTime)
+> loadPreludeSource = do
+>   entries <- liftM sort $ getDirectoryContents preludeSrcDir
+>   l <- mapM (scanEnt . ((preludeSrcDir ++ "/")++)) entries
+>   let (strs, modTimes) = unzip $ concat l
+>   return $ (concat strs, maximum modTimes)
+>   where
+>     scanEnt e
+>       | not (".k" `isSuffixOf` e)
+>       = return []
+>		| otherwise
+>		= do
+>			contents <- readFile e
+>			modTime  <- getModificationTime e
+>			return [(contents, modTime)]
+
 > checkPrelude args buildflags = do
 >   checkPreludeDirs
->   se <- doesFileExist preludeSrc
->   when (not se) $ error ("Prelude file " ++ preludeSrc ++ " does not exist.")
+>   (preludeSrc, preludeModTime) <- loadPreludeSource
 >   pe <- doesFileExist preludePath
->   when (not pe) $ genPrelude
->   smt <- getModificationTime preludeSrc
->   pmt <- getModificationTime preludePath
->   when (smt >= pmt) $ genPrelude
+>   when (not pe) $ genPrelude preludeSrc
+>   lastGen <- getModificationTime preludePath
+>   when (preludeModTime >= lastGen) $ genPrelude preludeSrc
 >   preBuild defaultUserHooks args buildflags
 
-> genPrelude = do
->   src <- readFile preludeSrc
+> genPrelude src = do
 >   writeFile preludePath $ unlines [
 >       "module Kaos.Prelude (preludeStr) where",
 >       "preludeStr :: String",
