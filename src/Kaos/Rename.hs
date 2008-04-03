@@ -233,6 +233,14 @@ notInScope = compileError . ("Variable not in scope: " ++)
 registerVar :: CAOSType -> String -> RenameT Slot
 registerVar t name = do
     s <- get
+    oldVar <- lex2slot' name
+    oldMacro <- getMacro name
+    case (oldVar, oldMacro) of
+        (Just _, _) -> warning $
+            "Declaration of " ++ name ++ " shadows previously declared variable"
+        (_, Just _) -> warning $
+            "Declaration of " ++ name ++ " shadows previously declared macro"
+        _ -> return ()
     slot <- lift $ newSlot t
     let slot' = slot { slotName = Just name }
     put $ M.insert name slot' s
