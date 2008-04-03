@@ -127,3 +127,149 @@ define kill(agent a) {
 		KILL $a(r);
 	};
 }
+
+define windowleft() returning numeric {
+	_caos { .inline let $_return = WNDL; };
+}
+
+define windowright() returning numeric {
+	_caos { .inline let $_return = WNDR; };
+}
+
+define pointer() returning agent {
+	_caos { .inline let $_return = PNTR; };
+}
+
+define null() returning agent {
+	_caos { .inline let $_return = NULL; };
+}
+
+define stop() {
+	_caos { STOP; };
+}
+
+define plane(agent a) returning numeric {
+	_caos {
+		.targ < $a {
+			.inline let $_return = PLNE;
+		};
+	}
+}
+
+define x(agent a) returning numeric {
+	_caos {
+		.targ < $a {
+			.inline let $_return = POSL;
+		};
+	}
+}
+
+define y(agent a) returning numeric {
+	_caos {
+		.targ < $a {
+			.inline let $_return = POST;
+		};
+	}
+}
+
+define centrex(agent a) returning numeric {
+	_caos {
+		.targ < $a {
+			.inline let $_return = POSX;
+		};
+	}
+}
+
+define newcompound(numeric family, numeric genus, numeric species, string spritefile, numeric firstframe, numeric noframes, numeric plane) returning agent {
+	_caos {
+		.targ > $_return {
+			NEW: COMP $family(r) $genus(r) $species(r) $spritefile(r) $firstframe(r) $noframes(r) $plane(r);
+		};
+	}
+}
+
+define set tick(numeric ticktime, agent a) {
+	_caos {
+		.targ < $a {
+			TICK $ticktime(r);
+		};
+	}
+}
+
+define set pose(numeric pose, agent a) {
+	_caos {
+		.targ < $a {
+			POSE $pose(r);
+		};
+	}
+}
+
+define killpart(agent a, numeric partno) {
+	_caos {
+		.targ < $a {
+			PAT: KILL $partno(r);
+		};
+	}
+}
+
+// TODO: ugh
+define changepart(agent a, numeric partno) {
+	_caos {
+		PART partno;
+	}
+}
+
+define newtextpart(agent a, numeric partno, string spritefile, numeric firstframe, numeric x, numeric y, numeric plane, string fontspritefile) {
+	_caos {
+		.targ < $a {
+			PAT: DULL $partno(r) $spritefile(r) $firstframe(r) $x(r) $y(r) $plane(r) $fontspritefile(r);
+		};
+	}
+}
+
+// TODO: better params
+define textformat(agent a, numeric leftmargin, numeric topmargin, numeric rightmargin, numeric bottommargin, numeric linespacing, numeric charspacing, numeric justification) {
+	_caos {
+		.targ < $a {
+			FRMT $leftmargin(r) $topmargin(r) $rightmargin(r) $bottommargin(r) $linespacing(r) $charspacing(r) $justification(r);
+		};
+	}
+}
+
+define set parttext(string text, agent a) {
+	_caos {
+		.targ < $a {
+			PTXT $text(r);
+		};
+	}
+}
+
+define nopages(agent a) returning numeric {
+	_caos {
+		.targ < $a {
+			.inline let $_return = NPGS;
+		};
+	}
+}
+
+define moveto(agent a, numeric x, numeric y) {
+	_caos {
+		.targ < $a {
+			MVTO $x(r) $y(r);
+		};
+	}
+}
+
+define floatto(agent a, agent target) {
+	_caos {
+		.targ < $a {
+			FLTO $target(r);
+		};
+	}
+}
+
+define owner() returning agent {
+	_caos {
+		.inline let $_return = OWNR;
+	};
+}
