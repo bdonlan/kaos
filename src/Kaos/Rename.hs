@@ -183,11 +183,11 @@ renameMacro macro e = do
     (iprefix, newMap) <- instantiateVars [] M.empty (mbArgs macro) expSlots
     oldMap <- get
     put $ newMap
-    registerVar (mbRetType macro) "_return"
+    registerVar (mbRetType macro) "return"
     inner <- enterMacro (mbContext macro) $ renameStatement $ (SBlock $ iprefix ++ [mbCode macro])
     newMap' <- get
     put oldMap
-    return $ EStmt (M.lookup "_return" newMap') (SBlock (oprefix ++ [inner]))
+    return $ EStmt (M.lookup "return" newMap') (SBlock (oprefix ++ [inner]))
     where
         name = mbName macro
         instExpr    :: Expression String

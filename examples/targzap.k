@@ -1,7 +1,7 @@
 define velx(agent a) returning numeric {
 	_caos {
 		.targ < $a {
-			.inline let $_return = VELX;
+			.inline let $return = VELX;
 		};
 	}
 }

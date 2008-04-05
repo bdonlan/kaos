@@ -138,7 +138,7 @@ compileUnit OVDecl{ ovName = name, ovIndex = Just idx, ovType = t }
                                     , mbType    = MacroRValue
                                     , mbRetType = t
                                     , mbArgs    = [MacroArg "o" typeObj Nothing]
-                                    , mbCode    = SICaos [ICLValue minBound "_return" atok]
+                                    , mbCode    = SICaos [ICLValue minBound "return" atok]
                                     }
         let setMacro = defaultMacro { mbName    = "set:" ++ name
                                     , mbType    = MacroLValue

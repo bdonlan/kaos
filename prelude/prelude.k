@@ -36,7 +36,7 @@
  */
 
 define sqrt(numeric v) returning numeric {
-	_caos { .inline let $_return = SQRT $v(r); }
+	_caos { .inline let $return = SQRT $v(r); }
 }
 
 define iterator(agent) enum(numeric family, numeric genus, numeric species) {
@@ -53,7 +53,7 @@ define iterator(agent) enum(numeric family, numeric genus, numeric species) {
   };
 }
 define unid(agent a) returning numeric {
-  _caos { .targ < $a { .inline let $_return = UNID; }; };
+  _caos { .targ < $a { .inline let $return = UNID; }; };
 }
 
 define iterator() reps(numeric n) {
@@ -65,7 +65,7 @@ define iterator() reps(numeric n) {
 }
 
 define norn() returning agent {
-  _caos { .inline let $_return = NORN; };
+  _caos { .inline let $return = NORN; };
 }
 
 define set norn(agent norn) {
@@ -74,7 +74,7 @@ define set norn(agent norn) {
 
 define newsimple(numeric family, numeric genus, numeric species, string spritefile, numeric firstframe, numeric noframes, numeric plane) returning agent {
         _caos {
-                .targ > $_return {
+                .targ > $return {
                         NEW: SIMP $family(r) $genus(r) $species(r) $spritefile(r) $firstframe(r) $noframes(r) $plane(r);
                 };
         }
@@ -84,7 +84,7 @@ define newsimple(numeric family, numeric genus, numeric species, string spritefi
 define attributes(agent a) returning numeric {
         _caos {
                 .targ < $a {
-                        .inline let $_return = ATTR;
+                        .inline let $return = ATTR;
                 };
         };
 }
@@ -129,19 +129,19 @@ define kill(agent a) {
 }
 
 define windowleft() returning numeric {
-	_caos { .inline let $_return = WNDL; };
+	_caos { .inline let $return = WNDL; };
 }
 
 define windowright() returning numeric {
-	_caos { .inline let $_return = WNDR; };
+	_caos { .inline let $return = WNDR; };
 }
 
 define pointer() returning agent {
-	_caos { .inline let $_return = PNTR; };
+	_caos { .inline let $return = PNTR; };
 }
 
 define null() returning agent {
-	_caos { .inline let $_return = NULL; };
+	_caos { .inline let $return = NULL; };
 }
 
 define stop() {
@@ -151,7 +151,7 @@ define stop() {
 define plane(agent a) returning numeric {
 	_caos {
 		.targ < $a {
-			.inline let $_return = PLNE;
+			.inline let $return = PLNE;
 		};
 	}
 }
@@ -159,7 +159,7 @@ define plane(agent a) returning numeric {
 define x(agent a) returning numeric {
 	_caos {
 		.targ < $a {
-			.inline let $_return = POSL;
+			.inline let $return = POSL;
 		};
 	}
 }
@@ -167,7 +167,7 @@ define x(agent a) returning numeric {
 define y(agent a) returning numeric {
 	_caos {
 		.targ < $a {
-			.inline let $_return = POST;
+			.inline let $return = POST;
 		};
 	}
 }
@@ -175,14 +175,14 @@ define y(agent a) returning numeric {
 define centrex(agent a) returning numeric {
 	_caos {
 		.targ < $a {
-			.inline let $_return = POSX;
+			.inline let $return = POSX;
 		};
 	}
 }
 
 define newcompound(numeric family, numeric genus, numeric species, string spritefile, numeric firstframe, numeric noframes, numeric plane) returning agent {
 	_caos {
-		.targ > $_return {
+		.targ > $return {
 			NEW: COMP $family(r) $genus(r) $species(r) $spritefile(r) $firstframe(r) $noframes(r) $plane(r);
 		};
 	}
@@ -247,7 +247,7 @@ define set parttext(string text, agent a) {
 define nopages(agent a) returning numeric {
 	_caos {
 		.targ < $a {
-			.inline let $_return = NPGS;
+			.inline let $return = NPGS;
 		};
 	}
 }
@@ -270,6 +270,6 @@ define floatto(agent a, agent target) {
 
 define owner() returning agent {
 	_caos {
-		.inline let $_return = OWNR;
+		.inline let $return = OWNR;
 	};
 }
