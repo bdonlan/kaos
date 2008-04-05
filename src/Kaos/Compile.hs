@@ -167,8 +167,10 @@ compileUnit d@OVDecl{} = do
 
 compileUnit (MacroBlock macro) = do
     lift $ dumpFlagged "dump-macros" show macro
+    code' <- lift $ preRenameTransforms (mbCode macro)
+    let macro' = macro { mbCode = code' }
     s <- get
-    let inCtx = macro { mbContext = flip M.lookup (csDefinedMacros s) }
+    let inCtx = macro' { mbContext = flip M.lookup (csDefinedMacros s) }
     put $ s { csDefinedMacros = M.insert (mbName inCtx) inCtx (csDefinedMacros s) }
 
 prepSeq :: CompileState -> S.Seq ByteString
