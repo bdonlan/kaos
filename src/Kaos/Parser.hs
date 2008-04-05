@@ -95,8 +95,8 @@ argDefaultNote = do
     liftM Just constVal
 
 macroType :: Parser MacroType
-macroType = (try (symbol "set") >> return MacroLValue)
-        <|> (try (symbol "iterator") >> macroIterator)
+macroType = (try (reserved "set") >> return MacroLValue)
+        <|> (try (reserved "iterator") >> macroIterator)
         <|> (return MacroRValue)
     where
         macroIterator = do
@@ -216,6 +216,8 @@ lexer  = P.makeTokenParser
          , reservedNames   = [
             -- toplevel
             "install", "remove", "script", "define", "ovar",
+            -- macros
+            "set", "iterator",
             -- types
             "numeric", "string", "agent", "void", "returning",
             -- everything else
