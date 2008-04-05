@@ -166,6 +166,7 @@ compileUnit d@OVDecl{} = do
     compileUnit $ d { ovIndex = Just idx }
 
 compileUnit (MacroBlock macro) = do
+    lift $ dumpFlagged "dump-macros" show macro
     s <- get
     let inCtx = macro { mbContext = flip M.lookup (csDefinedMacros s) }
     put $ s { csDefinedMacros = M.insert (mbName inCtx) inCtx (csDefinedMacros s) }
