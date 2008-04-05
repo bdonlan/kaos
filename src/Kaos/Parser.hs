@@ -219,7 +219,7 @@ lexer  = P.makeTokenParser
             -- types
             "numeric", "string", "agent", "void", "returning",
             -- everything else
-            "if", "else", "do", "until", "while", "for", "_caos", "_inst"]
+            "if", "else", "do", "until", "while", "for", "_caos", "atomic"]
          , caseSensitive   = True
          , commentLine     = "//"
          , commentStart    = "/*"
@@ -359,7 +359,7 @@ forloop = do
 
 instblock :: Parser (Statement String)
 instblock = do
-    reserved "_inst"
+    reserved "atomic"
     liftM (SInstBlock . SBlock) $ braces $ many statement
 
 iterCall :: Parser (Statement String)
