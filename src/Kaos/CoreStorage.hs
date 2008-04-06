@@ -35,6 +35,29 @@ import Kaos.CoreInline (inlineFallback)
 
 import qualified Data.Map as M
 
+dumpStorageTransitions :: MonadKaos m => StorageMap -> StorageMap -> m ()
+dumpStorageTransitions a b = cmpF (M.toList a) (M.toList b)
+    where
+        cmpF [] [] = return ()
+        cmpF xas@(pa@(ka, _):as) xbs@(pb@(kb, _):bs)
+            | ka < kb
+            = do debugKM $ "  DEL " ++ show pa
+                 cmpF as xbs
+            | kb < ka
+            = do debugKM $ "  ADD " ++ show pb
+                 cmpF xas bs
+            | pa == pb
+            = cmpF as bs
+            | otherwise
+            = do debugKM $ "  MOD " ++ show (pa, pb)
+                 cmpF as bs
+        cmpF [] (pb:bs)
+            = do debugKM $ "  ADD " ++ show pb
+                 cmpF [] bs
+        cmpF (pa:as) []
+            = do debugKM $ "  DEL " ++ show pa
+                 cmpF as []
+
 data Storage    = Private VirtRegister
                 | Shared  VirtRegister
                 | Const   ConstValue
@@ -77,10 +100,17 @@ markBlock (CB l) = saveCtx $ fmap CB $ mapM enterLine l
     where
         enterLine :: (CoreLine FutureS, FutureS) -> MarkM (CoreLine StorageS, StorageS)
         enterLine (line, future) = do
-            debugDump "dump-storage-assignment" $ "MARKING:\n" ++ dumpCore (CB [(line, future)])
+            debugDump "dump-storage-assignment" $ "MARKING:\n" ++ dumpCore (fmap (const ()) $ CB [(line, future)])
+            debugDump "dump-storage-assignment" $ "LOCAL FUTURE:\n" ++ dumpMap (getFuture future)
+            debugDump "dump-storage-assignment" $ "LOCAL ACCESS:\n" ++ dumpMap (getAM $getLineAccess future)
+            oldStorage <- get
+            debugDump "dump-storage-assignment" $ "STORAGE:\n" ++ dumpMap oldStorage
             line' <- local (const future) $ markLine line
             storage <- get
-            debugDump "dump-storage-assignment" $ " => " ++ show storage
+            whenSet "dump-storage-assignment" $
+                when (oldStorage /= storage) $ do
+                    debugKM "CHANGE:"
+                    dumpStorageTransitions oldStorage storage
             return (line', StorageS storage future)
 
 markLine :: CoreLine FutureS -> MarkM (CoreLine StorageS)

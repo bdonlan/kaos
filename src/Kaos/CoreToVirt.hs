@@ -66,7 +66,7 @@ transLine line@(CoreLine l) = do
         transStorage _ (Just (Private r)) = return $ CAOSRegister r
         transStorage _ (Just (Shared r)) = return $ CAOSRegister r
         transStorage _ (Just (Const c)) = return $ CAOSConst c
-        transStorage s Nothing = uninitialized s
+        transStorage s Nothing = uninitialized s line
         transStorage _ _ = fail $ "transLine: register storage in bad state: " ++ show line
 transLine (CoreConst slot c) = lookupStorage slot >>= checkAssign
     where
@@ -82,7 +82,7 @@ transLine l@(CoreAssign dest src) = do
     srcFuture   <- lookupFuture  src
     checkAssign destStorage destFuture srcStorage srcFuture
     where
-        checkAssign Nothing (Just _) Nothing _ = uninitialized src
+        checkAssign Nothing (Just _) Nothing _ = uninitialized src l
         checkAssign _ _ _ Nothing = return [] -- rename
         checkAssign (Just (Shared _)) _ _ _ = return [] -- alias
         checkAssign _ Nothing _ _ = return [] -- unused
@@ -144,8 +144,9 @@ doAssignType t dest src
         makeclause (_, (cond, verb)) =
             (prelude ++ cond, CAOSLine [CAOSLiteral verb, dest, src])
 
-uninitialized :: Slot -> TransM a
-uninitialized Slot{slotName = Just name} =
+uninitialized :: Show s => Slot -> CoreLine s -> TransM a
+uninitialized Slot{slotName = Just name} _ =
     compileError $ "Uninitialized variable `" ++ name ++ "'"
-uninitialized slot =
-    internalError $ "Uninitialized slot " ++ (show slot)
+uninitialized slot l = do
+    st <- ask
+    internalError $ "Uninitialized slot " ++ (show slot) ++ " in " ++ (show l) ++ " env:\n" ++ (show st)
