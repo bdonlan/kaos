@@ -222,7 +222,7 @@ define changepart(agent a, numeric partno) {
 define newtextpart(agent a, numeric partno, string spritefile, numeric firstframe, numeric x, numeric y, numeric plane, string fontspritefile) {
 	_caos {
 		.targ < $a {
-			PAT: DULL $partno(r) $spritefile(r) $firstframe(r) $x(r) $y(r) $plane(r) $fontspritefile(r);
+			PAT: FIXD $partno(r) $spritefile(r) $firstframe(r) $x(r) $y(r) $plane(r) $fontspritefile(r);
 		};
 	}
 }
@@ -318,6 +318,22 @@ define setfocus(agent a) {
 	_caos {
 		.targ < $a {
 			FCUS;
+		};
+	}
+}
+
+define randomagent(numeric family, numeric genus, numeric species) returning agent {
+	_caos {
+		.targ > $return {
+			RTAR $family(r) $genus(r) $species(r);
+		};
+	}
+}
+
+define shoutorder(agent a, string order) {
+	_caos {
+		.targ < $a {
+			ORDR SHOU $order(r);
 		};
 	}
 }
