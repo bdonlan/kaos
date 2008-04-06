@@ -30,6 +30,7 @@ data CAOSToken r =
 
 data CAOSLine r =
     CAOSLine [CAOSToken r]
+  | CAOSLoop (CAOS r)
     deriving (Show, Data, Typeable)
 
 type CAOSBlock r = [CAOSLine r]

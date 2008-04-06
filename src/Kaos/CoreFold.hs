@@ -23,10 +23,10 @@ import qualified Data.Map as M
 
 import Kaos.AST
 import Kaos.Core
+import Kaos.CoreTraverse
 import Kaos.CoreAccess
 import Kaos.KaosM
 import Kaos.Slot
-import Data.Generics
 import qualified Kaos.AliasMap as AM
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
@@ -126,7 +126,7 @@ foldLine line am = do
     return [fmap (const ()) line]
 
 stripFolds :: Core () -> KaosM (Core ())
-stripFolds = return . everywhere (mkT stripLine)
+stripFolds = mapCoreLinesM (return . stripLine)
     where
         stripLine :: CoreLine () -> CoreLine ()
         stripLine (CoreFoldable _ l) = l

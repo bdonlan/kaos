@@ -30,7 +30,7 @@ import Kaos.Parser
 import Kaos.Compile
 import Kaos.Prelude
 
-import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.ByteString.Char8 as BS
 
 
 --import Debug.Trace
@@ -159,7 +159,7 @@ doCompile s = do
     result <- compile (debugFlags s) merged
     case result of 
         Nothing -> exitFailure
-        Just str -> withOutputFile (outputFile s) (\h -> LBS.hPut h str)
+        Just str -> withOutputFile (outputFile s) (\h -> BS.hPut h str)
 
 parseFile :: String -> IO (KaosSource)
 parseFile fn = do

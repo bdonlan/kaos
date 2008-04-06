@@ -27,6 +27,7 @@ emitCaos c = unlines $ map emitLine c
 
 emitLine :: CAOSLine CAOSRegister -> String
 emitLine (CAOSLine l) = unwords $ map emitToken l
+emitLine (CAOSLoop l) = unlines $ map emitLine l
 
 emitToken :: CAOSToken CAOSRegister -> String
 emitToken (CAOSLiteral s) = map toUpper s

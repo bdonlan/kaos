@@ -3,7 +3,7 @@ Version:        0.01
 License:        GPL
 License-File:   COPYING
 Author:         Bryan Donlan
-Build-Depends:  base, mtl, haskell98, parsec, bytestring, containers
+Build-Depends:  base, mtl, haskell98, parsec, bytestring, containers, array
 Synopsis:       Kaos Compiler
 
 Executable:     kaos

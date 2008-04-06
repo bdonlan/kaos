@@ -150,7 +150,7 @@ showBlock (CB l) = mapM_ showpair l
         showpair (l', info) = prefixFirst ((show info) ++ " ") (showLine l')
 
 newtype CoreBlock t = CB { unCB :: [(CoreLine t, t)] }
-    deriving (Show, Data, Typeable)
+    deriving (Show, Data, Typeable, Monoid)
 type Core t = CoreBlock t
 
 instance Functor CoreBlock where
@@ -194,4 +194,3 @@ class LineAccess t where
 
 instance LineAccess AccessMap where getLineAccess = id
 instance LineAccess t => LineAccess (a, t) where getLineAccess = getLineAccess . snd
-
