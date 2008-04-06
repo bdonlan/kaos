@@ -18,42 +18,18 @@
 module Kaos.CoreAccess (markAccess, mergeAM, lineAccess) where
 
 import Kaos.Core
+import Kaos.CoreTraverse
 import Kaos.Slot
 import qualified Data.Map as M
 import Data.Monoid
-import Data.Generics
 import Kaos.CoreFuture
 import Debug.Trace
 import Kaos.KaosM
 import Control.Monad
 import Kaos.AST
 
-import Data.Generics.Basics
-import Data.Generics.Aliases
--- | Monadic variation on everywhere'
-everywhereM' :: Monad m => GenericM m -> GenericM m
-
--- Top-down order is also reflected in order of do-actions
-everywhereM' f x = gmapM (everywhereM' f) =<< (f x)
-
-dummyAccess :: CoreLine AccessMap -> AccessMap
--- dummyAccess = const $ amSingle (Slot (-1) Nothing typeVoid) NoAccess
-dummyAccess l = error ("Incorrect traversal order at " ++ show l)
-
-wipeNotes :: Core () -> Core AccessMap
-wipeNotes = everywhere (mkT poison) . fmap (const mempty)
-    where
-        poison :: (CoreLine AccessMap, AccessMap)
-               -> (CoreLine AccessMap, AccessMap)
-        poison (line, _) = (line, dummyAccess line)
-
 markAccess :: Core t -> KaosM (Core (AccessMap))
-markAccess cb =
-    fmap CB $ everywhereM' (mkM markLine) ls
-    where
-        ls = 
-            let CB l = wipeNotes (fmap (const ()) cb)
-            in  l
+markAccess = bottomUpMark lineAccess
 
 amSingle :: Slot -> AccessType -> AccessMap
 amSingle k v = AM $ M.singleton k v
@@ -61,11 +37,6 @@ amFromSA :: SlotAccess -> AccessMap
 amFromSA (SA k v) = amSingle k v
 amEmpty :: AccessMap
 amEmpty = AM $ M.empty
-
-markLine :: (CoreLine AccessMap, AccessMap) -> KaosM (CoreLine AccessMap, AccessMap)
-markLine (line, _) = do
-    accM <- lineAccess line
-    return (line, accM)
 
 lineAccess :: CoreLine AccessMap -> KaosM AccessMap
 lineAccess (CoreLine tokens) = do
