@@ -126,10 +126,10 @@ compileUnit :: KaosUnit -> CompileM ()
 compileUnit (InstallScript s) = compileCode s >>= emitInstall
 compileUnit (RemoveScript s)  = compileCode s >>= emitRemove
 compileUnit (AgentScript fmly gnus spcs scrp code) = do
-    emitScript $ "SCRP " ++ (show fmly) ++ " " ++ (show gnus) ++ " " ++
-                 (show spcs) ++ " " ++ (show scrp) ++ "\n"
-    compileCode code >>= finishCompile >>= emitScript
-    emitScript "ENDM\n"
+    let prelude = "\nSCRP " ++ (show fmly) ++ " " ++ (show gnus) ++ " " ++
+                  (show spcs) ++ " " ++ (show scrp) ++ "\n"
+    buf <- compileCode code >>= finishCompile
+    emitScript $ prelude ++ buf ++ "ENDM\n\n"
 compileUnit OVDecl{ ovName = name, ovIndex = Just idx, ovType = t }
     | idx < 0 || idx > 99
     = fail $ "Object variable index " ++ show idx ++ " is out of range"
