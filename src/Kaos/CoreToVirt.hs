@@ -85,10 +85,11 @@ transLine l@(CoreAssign dest src) = do
         checkAssign Nothing (Just _) Nothing _ = uninitialized src l
         checkAssign _ _ _ Nothing = return [] -- rename
         checkAssign (Just (Shared _)) _ _ _ = return [] -- alias
+        checkAssign (Just (Const _)) _ _ _ = return [] -- copy const
         checkAssign _ Nothing _ _ = return [] -- unused
         checkAssign (Just (Private r)) _ (Just srcStorage) _ = doAssign r srcStorage
 
-        checkAssign _ _ _ _ = fail $ "checkAssign: impossible state " ++ show l
+        checkAssign a b c d = fail $ "checkAssign: impossible state " ++ show ((a,b,c,d), l)
         doAssign r (Private s) =
             doAssignType (slotType dest) (CAOSRegister r) (CAOSRegister s)
         doAssign r (Shared s) =
