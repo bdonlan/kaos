@@ -65,18 +65,13 @@ tagTempSlots = everywhereM (mkM tagLine)
             return $ CoreTargReader ts s b
         tagLine l = return l
 
-usesTarg :: CoreLine t -> Bool
-usesTarg core = worker `runCont` id
+usesTarg :: forall a. Data a => CoreLine a -> Bool
+usesTarg line = isJust $ somewhere (mkM checkTarg) line
     where
-        worker = callCC $ \ret -> do
-            everywhereM (mkM (checkTarg ret)) $ fmap (const ()) core
-            return False
-        checkTarg :: (Bool -> Cont Bool (CoreLine ()))
-                  -> CoreLine ()
-                  -> Cont Bool (CoreLine ())
-        checkTarg ret (CoreTargReader _ _ _) = ret True
-        checkTarg ret (CoreTargWriter _ _) = ret True
-        checkTarg _ t = return t
+        checkTarg :: CoreLine a -> Maybe (CoreLine a)
+        checkTarg l@(CoreTargReader _ _ _) = Just l
+        checkTarg l@(CoreTargWriter _ _) = Just l
+        checkTarg _ = Nothing
 
 injectAssignments :: Core AccessMap -> KaosM (Core AccessMap)
 injectAssignments = return . everywhere (mkT injectOne)
