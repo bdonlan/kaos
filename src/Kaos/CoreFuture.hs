@@ -22,6 +22,7 @@ module Kaos.CoreFuture (
     ) where
 
 import Kaos.Core
+import Kaos.CoreTraverse
 import Kaos.Slot
 import Kaos.KaosM
 import Data.List
@@ -29,6 +30,8 @@ import Data.Maybe
 import Data.Generics
 import Control.Monad.State hiding (State)
 import Kaos.VirtRegister
+
+import Control.Monad.Identity
 
 import qualified Data.Map as M
 
@@ -55,11 +58,11 @@ type FutureM a = StateT FutureMap KaosM a
 lookupFuture :: Slot -> FutureM Future
 lookupFuture = gets . M.lookup
 
-poisonFuture :: LineAccess t => Core t -> Core FutureS
-poisonFuture = everywhere (mkT poison) . fmap (\la -> FutureS undefined (getLineAccess la))
+poisonFuture :: forall t. LineAccess t => Core t -> Core FutureS
+poisonFuture = runIdentity . mapCoreM poison
     where
-        poison :: (CoreLine FutureS, FutureS) -> (CoreLine FutureS, FutureS)
-        poison (l, la) = (l, FutureS err (getLineAccess la))
+        poison :: CoreLine FutureS -> t -> Identity (CoreLine FutureS, FutureS)
+        poison l la = return (l, FutureS err (getLineAccess la))
             where
                 err = error $ "Using the future of a deep block: " ++
                                 show (fmap (const ()) l)

@@ -27,6 +27,7 @@ import Data.Maybe
 
 import Kaos.AST
 import Kaos.Core
+import Kaos.CoreTraverse
 import Kaos.Slot
 import Kaos.KaosM
 import Kaos.CoreAccess
@@ -57,7 +58,7 @@ targExpand d = return (fmap (const ()) d)
            >>= debugDumpCore "dump-targ-final"
 
 tagTempSlots :: Core () -> KaosM (Core ())
-tagTempSlots = everywhereM (mkM tagLine)
+tagTempSlots = mapCoreLinesM tagLine
     where
         tagLine :: CoreLine () -> KaosM (CoreLine ())
         tagLine (CoreTargReader _ s b) = do
