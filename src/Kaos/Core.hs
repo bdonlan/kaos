@@ -22,7 +22,7 @@ module Kaos.Core (Core, CoreBlock(..), CoreLine(..), CoreToken(..),
              GenAccess(..), SlotAccess,
              dumpCore, dumpCoreLine,
              mergeAccess,
-             LineAccess(..), lineAccess,
+             LineAccess(..),
              Folder
              ) where
 
@@ -195,6 +195,3 @@ class LineAccess t where
 instance LineAccess AccessMap where getLineAccess = id
 instance LineAccess t => LineAccess (a, t) where getLineAccess = getLineAccess . snd
 
-lineAccess :: LineAccess t => (CoreLine t, t) -> AccessMap
-lineAccess  = getLineAccess . snd
-    
