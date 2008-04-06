@@ -1,32 +1,42 @@
-module Kaos.CoreTraverse (bottomUpMark) where
+module Kaos.CoreTraverse (bottomUpMark, mapCoreLinesM, mapCoreM) where
 
 import Kaos.Core
-import Kaos.KaosM
 import Control.Monad
 
-bottomUpMark :: (CoreLine b -> KaosM b)
-            -> (Core a -> KaosM (Core b))
-bottomUpMark f (CB ls) = liftM CB $ mapM processLine ls
-    where
-        processLine (l, _) = do
-            l' <- bottomUpRecurse f l
-            m  <- f l'
-            return (l', m)
+bottomUpMark :: Monad m
+             => (CoreLine b -> m b)
+             -> (Core a -> m (Core b))
+bottomUpMark f = mapCoreM (\l _ -> do { m <- f l; return (l, m) })
 
-bottomUpRecurse :: (CoreLine b -> KaosM b)
-                -> (CoreLine a -> KaosM (CoreLine b))
-bottomUpRecurse _ l@(CoreLine _) = return $ fmap undefined l
-bottomUpRecurse _ l@(CoreAssign _ _) = return $ fmap undefined l
-bottomUpRecurse _ l@(CoreInlineAssign{}) = return $ fmap undefined l
-bottomUpRecurse _ l@(CoreInlineFlush _) = return $ fmap undefined l
-bottomUpRecurse _ l@(CoreConst _ _) = return $ fmap undefined l
-bottomUpRecurse _ l@(CoreNote _) = return $ fmap undefined l
-bottomUpRecurse _ l@(CoreFoldable _ _) = return $ fmap undefined l
-bottomUpRecurse _ l@(CoreTouch _) = return $ fmap undefined l
-bottomUpRecurse f (CoreCond t b1 b2) =
-    liftM2 (CoreCond t) (bottomUpMark f b1) (bottomUpMark f b2)
-bottomUpRecurse f (CoreLoop b) = liftM CoreLoop $ bottomUpMark f b
-bottomUpRecurse f (CoreTargReader s1 s2 b) =
-    liftM (CoreTargReader s1 s2) $ bottomUpMark f b
-bottomUpRecurse f (CoreTargWriter s b) = liftM (CoreTargWriter s) $ bottomUpMark f b
-bottomUpRecurse _ CoreTargZap = return CoreTargZap
+mapCoreLinesM :: Monad m
+              => (CoreLine () -> m (CoreLine ()))
+              -> (Core a -> m (Core ()))
+mapCoreLinesM f = mapCoreM (\l _ -> do { l' <- f l; return (l', ()) })
+
+mapCoreM    :: Monad m
+            => (CoreLine b -> a -> m (CoreLine b, b))
+            -> (Core a -> m (Core b))
+mapCoreM f (CB ls) = liftM CB $ mapM processLine ls
+    where
+        processLine (l, m) = do
+            l' <- recurseLineM f l
+            f l' m
+
+recurseLineM :: Monad m
+             => (CoreLine b -> a -> m (CoreLine b, b))
+             -> (CoreLine a -> m (CoreLine b))
+recurseLineM _ l@(CoreLine _) = return $ fmap undefined l
+recurseLineM _ l@(CoreAssign _ _) = return $ fmap undefined l
+recurseLineM _ l@(CoreInlineAssign{}) = return $ fmap undefined l
+recurseLineM _ l@(CoreInlineFlush _) = return $ fmap undefined l
+recurseLineM _ l@(CoreConst _ _) = return $ fmap undefined l
+recurseLineM _ l@(CoreNote _) = return $ fmap undefined l
+recurseLineM _ l@(CoreFoldable _ _) = return $ fmap undefined l
+recurseLineM _ l@(CoreTouch _) = return $ fmap undefined l
+recurseLineM f (CoreCond t b1 b2) =
+    liftM2 (CoreCond t) (mapCoreM f b1) (mapCoreM f b2)
+recurseLineM f (CoreLoop b) = liftM CoreLoop $ mapCoreM f b
+recurseLineM f (CoreTargReader s1 s2 b) =
+    liftM (CoreTargReader s1 s2) $ mapCoreM f b
+recurseLineM f (CoreTargWriter s b) = liftM (CoreTargWriter s) $ mapCoreM f b
+recurseLineM _ CoreTargZap = return CoreTargZap
