@@ -180,9 +180,9 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
     put s
     onfalse' <- markBlock onfalse
     s_f <- get
-    let u1 = s_f `M.union` s_t
-    let u2 = s_t `M.union` s_f
-    when (u1 /= u2) $ fail $ unlines["Storage states diverged:", dumpCoreLine (fmap (const()) l), dumpMap s_t, dumpMap s_f, dumpMap future]
+    let u1 = s_f `M.union` s_t `M.union` s
+    let u2 = s `M.union` s_t `M.union` s_f
+    when (u1 /= u2) $ fail $ unlines["Storage states diverged:", dumpCoreLine (fmap (const()) l), dumpMap s_t, dumpMap s_f, dumpMap s, dumpMap future]
     put u1
     return $ CoreCond cond' ontrue' onfalse'
     where
