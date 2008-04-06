@@ -15,7 +15,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-module Kaos.CoreAccess (markAccess, mergeAM) where
+module Kaos.CoreAccess (markAccess, mergeAM, lineAccess) where
 
 import Kaos.Core
 import Kaos.Slot
@@ -64,26 +64,26 @@ amEmpty = AM $ M.empty
 
 markLine :: (CoreLine AccessMap, AccessMap) -> KaosM (CoreLine AccessMap, AccessMap)
 markLine (line, _) = do
-    accM <- markLine' line
+    accM <- lineAccess line
     return (line, accM)
 
-markLine' :: CoreLine AccessMap -> KaosM AccessMap
-markLine' (CoreLine tokens) = do
+lineAccess :: CoreLine AccessMap -> KaosM AccessMap
+lineAccess (CoreLine tokens) = do
         return . mconcat $ map findAccess tokens
     where findAccess (TokenSlot sa) = amFromSA sa
           findAccess _              = mempty
-markLine' (CoreTouch sa) = return $ amFromSA sa
+lineAccess (CoreTouch sa) = return $ amFromSA sa
 
 
-markLine' (CoreAssign s1 s2) = return $
+lineAccess (CoreAssign s1 s2) = return $
     amSingle s1 WriteAccess `mappend` amSingle s2 ReadAccess
 
-markLine' (CoreConst s1 _) = return $ amSingle s1 WriteAccess
+lineAccess (CoreConst s1 _) = return $ amSingle s1 WriteAccess
 
 -- XXX: Needs to be sensitive to context
-markLine' (CoreCond condition ifTrue ifFalse) =
+lineAccess (CoreCond condition ifTrue ifFalse) =
     do
-        condA  <- markLine' (CoreLine condition)
+        condA  <- lineAccess (CoreLine condition)
         trueA  <- blockAccess ifTrue
         falseA <- blockAccess ifFalse
         let rv  = condA `mappend` (promoteWrites $ trueA `mappend` falseA)
@@ -94,7 +94,7 @@ markLine' (CoreCond condition ifTrue ifFalse) =
                 promote (k, WriteAccess) = (k, MutateAccess)
                 promote p = p
 
-markLine' (CoreLoop body) = do
+lineAccess (CoreLoop body) = do
     body' <- markAccess body
     let AM bodyAccess = blockAccess' body'
     bodyFutures <- fmap snd $ markBlockFuture' M.empty body'
@@ -107,20 +107,20 @@ markLine' (CoreLoop body) = do
         merge' (Just Read)  ReadAccess    = ReadAccess
     	merge' _            MutateAccess  = MutateAccess
         merge' x            y             = trace ("merge' fallback: " ++ show (x, y)) MutateAccess
-markLine' (CoreTargReader ts s body) = do
+lineAccess (CoreTargReader ts s body) = do
     bodyA <- blockAccess body
     return $ amSingle ts MutateAccess `mappend` amSingle s ReadAccess `mappend` bodyA
-markLine' (CoreTargWriter s body) = do
+lineAccess (CoreTargWriter s body) = do
     bodyA <- blockAccess body
     return $ amSingle s WriteAccess `mappend` bodyA
 
-markLine' (CoreNote _) = return amEmpty
-markLine' (CoreFoldable _ l) = markLine' l
-markLine' (CoreInlineFlush _) = return amEmpty
-markLine' (CoreInlineAssign _ _ dest replacement) = do
-    replMap <- markLine' (CoreLine replacement)
+lineAccess (CoreNote _) = return amEmpty
+lineAccess (CoreFoldable _ l) = lineAccess l
+lineAccess (CoreInlineFlush _) = return amEmpty
+lineAccess (CoreInlineAssign _ _ dest replacement) = do
+    replMap <- lineAccess (CoreLine replacement)
     return $ amSingle dest WriteAccess `mappend` replMap
-markLine' CoreTargZap = return amEmpty
+lineAccess CoreTargZap = return amEmpty
 
 baMergeAM :: AccessMap
           -> M.Map Slot AccessType
