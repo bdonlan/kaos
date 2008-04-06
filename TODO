@@ -1,7 +1,6 @@
 * More useful error reporting (ongoing)
 * More prelude definitions
 (preview release?)
-* Final regalloc stage
 * Compound types - user defined?
   - parts
 (alpha release?)
