@@ -215,7 +215,7 @@ define killpart(agent a, numeric partno) {
 // TODO: ugh
 define changepart(agent a, numeric partno) {
 	_caos {
-		PART partno;
+		PART $partno(r);
 	}
 }
 
@@ -263,7 +263,7 @@ define moveto(agent a, numeric x, numeric y) {
 define floatto(agent a, agent target) {
 	_caos {
 		.targ < $a {
-			FLTO $target(r);
+			FREL $target(r);
 		};
 	}
 }
@@ -273,3 +273,52 @@ define owner() returning agent {
 		.inline let $return = OWNR;
 	};
 }
+
+define set inputmask(numeric mask, agent a) {
+	_caos {
+		.targ < $a {
+			IMSK $mask(r);
+		};
+	}
+}
+
+define set plane(numeric val, agent a) {
+	_caos {
+		.targ < $a {
+			PLNE $val(r);
+		};
+	}
+}
+
+define parttext(agent a) returning string {
+	_caos {
+		.targ < $a {
+			.inline let $return = PTXT;
+		};
+	}
+}
+
+define floatat(agent a, numeric x, numeric y) {
+	_caos {
+		.targ < $a {
+			FLTO $x(r) $y(r);
+		};
+	}
+}
+
+define newtextinputpart(agent a, numeric partno, string spritefile, numeric firstframe, numeric x, numeric y, numeric plane, numeric msgno, string fontspritefile) {
+	_caos {
+		.targ < $a {
+			PAT: TEXT $partno(r) $spritefile(r) $firstframe(r) $x(r) $y(r) $plane(r) $msgno(r) $fontspritefile(r);
+		};
+	}
+}
+
+define setfocus(agent a) {
+	_caos {
+		.targ < $a {
+			FCUS;
+		};
+	}
+}
+
