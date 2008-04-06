@@ -229,13 +229,14 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
         setupEntry' _ Nothing            = return [] -- if we don't use it, it can go wherever (XXX: is this safe wrt underlying regalloc?)
         setupEntry' (slot, acc) future = do
             curAcc <- getStorage slot
-            case curAcc of
-                Just (Private r) -> return [(slot, Bound r)]
-                Nothing -> do
+            case (curAcc, acc) of
+                (Just (Private r), _) -> return [(slot, Bound r)]
+                (Just (Shared r), ReadAccess) -> return [(slot, Bound r)]
+                (Nothing, _) -> do
                     newStorage slot future
                     Just (Private st) <- getStorage slot
                     return [(slot, Bound st)]
-                x -> fail $ "trying to bind a shared slot: " ++ show (slot, x, acc, fmap (const ()) l)
+                (x, _) -> fail $ "trying to bind a shared slot: " ++ show (slot, x, acc, fmap (const ()) l)
         
 markLine (CoreFoldable folder body) = do
     body' <- markLine body
