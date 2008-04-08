@@ -35,7 +35,7 @@ sub prep_re {
 	my $re = shift;
 	my %seen;
 	$re =~ s/\s+/\\s+/g;
-	$re =~ s[(\$\d+)][$seen{$1}++ ? $1 : '(VA\d\d)']ge;
+	$re =~ s[\$(\d+)][$seen{$1}++ ? "\\$1" : '(VA\d\d)']ge;
 	return $re;
 }
 
@@ -61,7 +61,7 @@ sub test_output {
 	} else {
 		ok(0, $desc);
 		print "# Expected:\n";
-		print hashp_str($re);
+		print hashp_str($_[2]);
 		print "# Got:\n";
 		print hashp_str($out);
 	}
