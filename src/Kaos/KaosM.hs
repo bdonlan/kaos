@@ -21,6 +21,7 @@ module Kaos.KaosM (runKaosM, KaosM, newSlot, debugKM, MonadKaos(..),
                   putCtx, getCtx, context, commitFail
                   ) where
 
+import System.IO
 import Kaos.SeqT
 import Kaos.Slot
 import Kaos.AST
@@ -127,12 +128,12 @@ instance KaosDiagM KaosM where
 
 printDiag :: MonadIO m => KaosDiag -> m ()
 printDiag d = liftIO $ do
-    putStr $ showContext (kdContext d)
-    putStr ": "
+    hPutStr stderr $ showContext (kdContext d)
+    hPutStr stderr ": "
     if (kdFatal d)
-        then putStr "Error: "
-        else putStr "Warning: "
-    putStrLn (kdMessage d)
+        then hPutStr stderr "Error: "
+        else hPutStr stderr "Warning: "
+    hPutStrLn stderr (kdMessage d)
 
 kmWarning :: String -> KaosM ()
 kmWarning message = KM $ do
