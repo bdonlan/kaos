@@ -26,7 +26,9 @@
 >   cleanHook defaultUserHooks pd lbi uh cf
 
 > checkPreludeDirs = createDirectoryIfMissing True preludeDir
-> cleanPrelude = removeDirectoryRecursive "gen"
+> cleanPrelude = do
+>	checkPreludeDirs
+>	removeDirectoryRecursive "gen"
 
 > loadPreludeSource :: IO (String, ClockTime)
 > loadPreludeSource = do
