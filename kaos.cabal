@@ -10,4 +10,4 @@ Executable:     kaos
 Main-Is:        Main.hs
 Hs-Source-Dirs: src, gen
 ghc-options:    -Wall -Werror
-extensions:     MultiParamTypeClasses, UndecidableInstances, GeneralizedNewtypeDeriving, BangPatterns, DeriveDataTypeable, TypeSynonymInstances, ScopedTypeVariables, FunctionalDependencies, FlexibleInstances, FlexibleContexts, RelaxedPolyRec
+extensions:     MultiParamTypeClasses, UndecidableInstances, GeneralizedNewtypeDeriving, BangPatterns, DeriveDataTypeable, TypeSynonymInstances, ScopedTypeVariables, FunctionalDependencies, FlexibleInstances, FlexibleContexts, RelaxedPolyRec, Rank2Types
