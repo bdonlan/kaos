@@ -128,24 +128,24 @@ writesSlot :: AccessMap -> Slot -> Bool
 (AM am) `writesSlot` slot = (fromMaybe NoAccess $ M.lookup slot am) > ReadAccess
 
 mergeAdjacent :: Core AliasTag -> KaosM (Core AliasTag)
-mergeAdjacent = return . everywhere (mkT mergeBlock)
+mergeAdjacent = editCoreCtxM id step
     where
-        mergeBlock :: CoreBlock AliasTag -> CoreBlock AliasTag
-        mergeBlock (CB ls) = CB $ slidingMerge ls
-            where
-                slidingMerge (a@(lineA, aliasA):b@(lineB, aliasB):r)
-                    = case tryMerge lineA lineB aliasA aliasB of
-                        Just c  -> slidingMerge (c:r)
-                        Nothing -> a:(slidingMerge (b:r))
-                slidingMerge l = l
-
-                tryMerge (CoreTargReader ts1 s1 (CB blk1)) (CoreTargReader ts2 _ (CB blk2)) _ rAlias
-                    | AM.aliases ts1 ts2 rAlias
-                    = Just $ (CoreTargReader ts1 s1 (CB (blk1 ++ blk2)), rAlias)
-                tryMerge (CoreTargWriter s1 (CB blk1)) (CoreTargReader _ s2 (CB blk2)) wAlias rAlias
-                    | AM.aliases s1 s2 wAlias
-                    = Just $ (CoreTargWriter s1 (CB $ blk1 ++ blk2), rAlias)
-                tryMerge _ _ _ _ = Nothing
+        step :: CoreLine AliasTag
+             -> AliasTag
+             -> [(CoreLine AliasTag, AliasTag)]
+             -> KaosM ([(CoreLine AliasTag, AliasTag)], [(CoreLine AliasTag, AliasTag)])
+        step lineA aliasA [] = return ([ (lineA, aliasA )], [])
+        step lineA aliasA (p@(lineB, aliasB):ls) =
+            case tryMerge lineA lineB aliasA aliasB of
+                Just c -> return ( [], c:ls )
+                Nothing -> return ([ (lineA, aliasA) ], p:ls)
+        tryMerge (CoreTargReader ts1 s1 (CB blk1)) (CoreTargReader ts2 _ (CB blk2)) _ rAlias
+            | AM.aliases ts1 ts2 rAlias
+            = Just $ (CoreTargReader ts1 s1 (CB (blk1 ++ blk2)), rAlias)
+        tryMerge (CoreTargWriter s1 (CB blk1)) (CoreTargReader _ s2 (CB blk2)) wAlias rAlias
+            | AM.aliases s1 s2 wAlias
+            = Just $ (CoreTargWriter s1 (CB $ blk1 ++ blk2), rAlias)
+        tryMerge _ _ _ _ = Nothing
 
 stripTarg :: Core a -> KaosM (Core ())
 stripTarg = editLinesCtxM id stripOneTarg
