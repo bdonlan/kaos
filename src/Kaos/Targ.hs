@@ -74,13 +74,13 @@ usesTarg line = isJust $ somewhere (mkM checkTarg) line
         checkTarg l@(CoreTargWriter _ _) = Just l
         checkTarg _ = Nothing
 
-injectAssignments :: Core AccessMap -> KaosM (Core AccessMap)
-injectAssignments = return . everywhere (mkT injectOne)
+injectAssignments :: Core a -> KaosM (Core ())
+injectAssignments = mapCoreLinesM injectOne
     where
-        injectOne :: CoreLine AccessMap -> CoreLine AccessMap
-        injectOne (CoreTargWriter slot (CB ls)) =
-            CoreTargWriter slot (CB $ ls ++ [(targAssign slot, undefined)])
-        injectOne l = l
+        injectOne :: CoreLine () -> KaosM (CoreLine ())
+        injectOne (CoreTargWriter slot (CB ls)) = return $
+            CoreTargWriter slot (CB $ ls ++ [(targAssign slot, ())])
+        injectOne l = return l
 
 expandForward  :: Core () -> KaosM (Core ())
 expandForward = return . everywhere' (mkT expandOne)
@@ -147,22 +147,18 @@ mergeAdjacent = return . everywhere (mkT mergeBlock)
                     = Just $ (CoreTargWriter s1 (CB $ blk1 ++ blk2), rAlias)
                 tryMerge _ _ _ _ = Nothing
 
-stripTarg :: Core () -> KaosM (Core ())
-stripTarg = return . everywhere (mkT stripOneTarg)
+stripTarg :: Core a -> KaosM (Core ())
+stripTarg = editLinesCtxM id stripOneTarg
     where
-        stripOneTarg :: [(CoreLine (), ())] -> [(CoreLine (), ())]
-        stripOneTarg = map (\l -> (l, ())) . stripOneTarg' . map fst
-        stripOneTarg' :: [CoreLine ()] -> [CoreLine ()]
-        stripOneTarg' ((CoreTargReader tempslot slot block):remain) =
+        stripOneTarg  l ls = return (stripOneTarg' l, ls)
+        stripOneTarg' (CoreTargReader tempslot slot block) =
                [(CoreAssign tempslot slot),(CoreLine [TokenLiteral "targ", TokenSlot (SA tempslot ReadAccess)])]
             ++ (map fst . unCB $ block)
             ++ [CoreTargZap]
-            ++ remain
-        stripOneTarg' ((CoreTargWriter _ block):remain) =
+        stripOneTarg' (CoreTargWriter _ block) =
                (map fst . unCB $ block)
             ++ [CoreTargZap]
-            ++ remain
-        stripOneTarg' l = l
+        stripOneTarg' l = [l]
 
 targAssign :: Slot -> CoreLine a
 targAssign slot = CoreInlineAssign maxBound True slot [TokenLiteral "targ"]
