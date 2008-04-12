@@ -45,8 +45,9 @@ test_output("Setting targ (multiple contexts; partial folding)", q{
 	TARG NULL
 	SETV $1 UNID
 	TARG NORN
+	SETV $2 UNID
 	OUTV $1
-	OUTV UNID
+	OUTV $2
 	RSCR
 });
 
