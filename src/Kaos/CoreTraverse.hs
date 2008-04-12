@@ -3,11 +3,13 @@ module Kaos.CoreTraverse (
     mapCoreLinesM,
     mapCoreM,
     editCoreCtxM,
-    editLinesCtxM
+    editLinesCtxM,
+    editLinesCtx
     ) where
 
 import Kaos.Core
-import Control.Monad
+--import Control.Monad
+import Control.Monad.Identity
 
 -- |Mark every line in the core, starting from the leaves and working up.
 bottomUpMark :: Monad m
@@ -97,3 +99,10 @@ editLinesCtxM lf m = editCoreCtxM lf m' . fmap (const ())
             (commit, pending) <- m li (map fst ls)
             return $ (map mark commit, map mark pending)
         mark x = (x, ())
+
+editLinesCtx :: forall a.
+                (forall t. [t] -> [t])
+             -> (CoreLine () -> [CoreLine ()] -> ([CoreLine ()], [CoreLine ()]))
+             -> Core a
+             -> Core ()
+editLinesCtx lf f = runIdentity . editLinesCtxM lf (\a b -> return $ f a b)
