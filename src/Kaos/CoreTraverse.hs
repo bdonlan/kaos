@@ -3,6 +3,7 @@ module Kaos.CoreTraverse (
     mapCoreLinesM,
     mapCoreM,
     recurseLineM,
+    recurseLine,
     editCoreCtxM,
     editCoreCtx,
     editLinesCtxM,
@@ -60,6 +61,10 @@ recurseLineM _ CoreTargZap = return CoreTargZap
 {-# SPECIALIZE recurseLineM :: (Core a -> Identity (Core b))
                             -> (CoreLine a -> Identity (CoreLine b))
   #-}
+
+-- |Non-monadic version of recurseLineM
+recurseLine :: (Core a -> Core b) -> CoreLine a -> CoreLine b
+recurseLine f = runIdentity . recurseLineM (return . f)
 
 -- |Apply a transformation to the Core with context.
 --  The transformation function will be provided with a list of later
