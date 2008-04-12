@@ -6,6 +6,8 @@
 > import Data.List
 > import Control.Monad
 > import System.Time (ClockTime)
+> import System.Process
+> import System.Exit
 
 > heads = unfoldr step . Just
 >    where
@@ -18,7 +20,7 @@
 > preludeDir  = fst $ splitFileName preludePath
 > preludeDirs = reverse $ map combine $ heads $ splitPath preludeDir
 
-> hooks = defaultUserHooks { preBuild = checkPrelude, cleanHook = cleanPreludeHook }
+> hooks = defaultUserHooks { preBuild = checkPrelude, cleanHook = cleanPreludeHook, runTests = testhook }
 > main = defaultMainWithHooks hooks
  
 > cleanPreludeHook pd lbi uh cf = do
@@ -61,3 +63,10 @@
 >       "preludeStr :: String",
 >       "preludeStr = " ++ show src
 >       ]
+
+> testhook args _ _ _ = do
+>	ph <- runProcess "perl" ("runtests.pl":args) Nothing Nothing Nothing Nothing Nothing
+>	exitCode <- waitForProcess ph
+>	case exitCode of
+>		ExitSuccess -> return ()
+>		_ -> exitWith exitCode
