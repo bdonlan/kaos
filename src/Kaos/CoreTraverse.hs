@@ -57,6 +57,9 @@ recurseLineM f (CoreTargReader s1 s2 b) =
 recurseLineM f (CoreTargWriter s b) = liftM (CoreTargWriter s) $ f b
 recurseLineM _ CoreTargZap = return CoreTargZap
 
+{-# SPECIALIZE recurseLineM :: (Core a -> Identity (Core b))
+                            -> (CoreLine a -> Identity (CoreLine b))
+  #-}
 
 -- |Apply a transformation to the Core with context.
 --  The transformation function will be provided with a list of later
