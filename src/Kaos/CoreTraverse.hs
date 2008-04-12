@@ -3,6 +3,7 @@ module Kaos.CoreTraverse (
     mapCoreLinesM,
     mapCoreM,
     editCoreCtxM,
+    editCoreCtx,
     editLinesCtxM,
     editLinesCtx
     ) where
@@ -87,6 +88,20 @@ editCoreCtxM lf m (CB cl) = liftM (CB . lf) . iter =<< pre (lf cl)
             (l', pending) <- m l mark ls
             suffix <- iter pending
             return $ l' ++ suffix
+
+-- |A non-monadic version of editCoreCtxM
+editCoreCtx    :: forall a b .
+                   (forall t. [t] -> [t])
+                -> (   CoreLine b
+                    -> a
+                    -> [(CoreLine b, a)]
+                    -> ( [(CoreLine b, b)], [(CoreLine b, a)] )
+                   )
+                -> Core a
+                -> Core b
+
+editCoreCtx lf m = runIdentity . editCoreCtxM lf m'
+    where   m' a b c = return $ m a b c
 
 editLinesCtxM :: forall a m. Monad m
               => (forall t. [t] -> [t])
