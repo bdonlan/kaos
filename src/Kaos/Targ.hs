@@ -21,7 +21,6 @@ module Kaos.Targ (targExpand, stripTarg) where
 --import Control.Monad (guard)
 import Control.Monad.Cont
 
-import Data.Generics
 import qualified Data.Map as M
 import Data.Maybe
 
@@ -102,29 +101,30 @@ expandForward = return . editLinesCtx id expandOne
         expandOne l ls = ([l], ls)
 
 expandBackward :: Core AccessMap -> KaosM (Core AccessMap)
-expandBackward = return . everywhere (mkT expandOne)
+expandBackward = return . editCoreCtx reverse (curry expandOne)
     where
-        expandOne :: [(CoreLine AccessMap, AccessMap)]
+        expandOne :: (CoreLine AccessMap, AccessMap)
                   -> [(CoreLine AccessMap, AccessMap)]
+                  -> ([(CoreLine AccessMap, AccessMap)], [(CoreLine AccessMap, AccessMap)])
         -- When an assignment appears before a targread, follow the rename
-        expandOne (a@(CoreAssign vdest vsrc, am1):(CoreTargReader ts s (CB blk), am2):remain)
+        expandOne ((CoreTargReader ts s (CB blk)),am2) (a@(CoreAssign vdest vsrc, am1):remain)
             | vdest == s || vsrc == s
-            = (CoreTargReader ts vsrc (CB $ a:blk), mergedAM):remain
+            = ([], (CoreTargReader ts vsrc (CB $ a:blk), mergedAM):remain)
             where
                 mergedAM = am1 `mergeAM` am2       
         -- Do not expand across other targ blocks; this is a job for later phases
-        expandOne xs@((prev, _):_)
+        expandOne x xs@((prev, _):_)
             | usesTarg prev
-            = xs
+            = ([x], xs)
         -- Read swallows anything that doesn't write to its variable
-        expandOne (target@(_, targetAM):(CoreTargReader ts s (CB blk), am2):xs)
+        expandOne (CoreTargReader ts s (CB blk), am2) (target@(_, targetAM):xs)
             | not (targetAM `writesSlot` ts || targetAM `writesSlot` s)
-            = (CoreTargReader ts s (CB $ target:blk), am2 `mergeAM` targetAM):xs
+            = ([], (CoreTargReader ts s (CB $ target:blk), am2 `mergeAM` targetAM):xs)
         -- Write swallows anything at all
-        expandOne (target@(_, targetAM):(CoreTargWriter s (CB blk), am2):xs)
-            = (CoreTargWriter s (CB $ target:blk), am2 `mergeAM` targetAM):xs
+        expandOne (CoreTargWriter s (CB blk), am2) (target@(_, targetAM):xs)
+            = ([], (CoreTargWriter s (CB $ target:blk), am2 `mergeAM` targetAM):xs)
         -- Leave anything else alone
-        expandOne xs = xs
+        expandOne x xs = ([x], xs)
 
 writesSlot :: AccessMap -> Slot -> Bool
 (AM am) `writesSlot` slot = (fromMaybe NoAccess $ M.lookup slot am) > ReadAccess
