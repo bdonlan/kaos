@@ -83,21 +83,23 @@ injectAssignments = mapCoreLinesM injectOne
         injectOne l = return l
 
 expandForward  :: Core () -> KaosM (Core ())
-expandForward = return . everywhere' (mkT expandOne)
+expandForward = return . editLinesCtx id expandOne
     where
-        expandOne :: [(CoreLine (), ())]
-                  -> [(CoreLine (), ())]
+        expandOne :: CoreLine ()
+                  -> [CoreLine ()]
+                  -> ([CoreLine ()], [CoreLine()])
         -- by now, reads and writes have been merged,
         -- and crucially each write has its assignment statement added
         -- we can now expand forward to swallow up targ-neutral lines
-        expandOne p@(_:(line, ()):_)
+        expandOne p [] = ([p], [])
+        expandOne p remain@(line:_)
             | usesTarg line
-            = p
-        expandOne ((CoreTargReader ts s (CB blk), ()):lp:ls)
-            = (CoreTargReader ts s (CB (blk ++ [lp])), ()):ls
-        expandOne ((CoreTargWriter s (CB blk), ()):lp:ls)
-            = (CoreTargWriter s (CB (blk ++ [lp])), ()):ls
-        expandOne p = p
+            = ([p], remain)
+        expandOne (CoreTargReader ts s (CB blk)) (lp:ls)
+            = ([], (CoreTargReader ts s (CB $ blk ++ [(lp, ())])):ls)
+        expandOne (CoreTargWriter s (CB blk)) (lp:ls)
+            = ([], (CoreTargWriter s (CB $ blk ++ [(lp, ())])):ls)
+        expandOne l ls = ([l], ls)
 
 expandBackward :: Core AccessMap -> KaosM (Core AccessMap)
 expandBackward = return . everywhere (mkT expandOne)
