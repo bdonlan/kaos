@@ -2,6 +2,7 @@ module Kaos.CoreTraverse (
     bottomUpMark,
     mapCoreLinesM,
     mapCoreM,
+    recurseLineM,
     editCoreCtxM,
     editCoreCtx,
     editLinesCtxM,
