@@ -66,13 +66,13 @@ tagTempSlots = mapCoreLinesM tagLine
             return $ CoreTargReader ts s b
         tagLine l = return l
 
-usesTarg :: forall a. Data a => CoreLine a -> Bool
-usesTarg line = isJust $ somewhere (mkM checkTarg) line
+usesTarg :: CoreLine a -> Bool
+usesTarg line = flip runCont id $ callCC $ \cc -> (mapCoreLinesM (checkLine cc) (CB [(line, undefined)]) >> return False)
     where
-        checkTarg :: CoreLine a -> Maybe (CoreLine a)
-        checkTarg l@(CoreTargReader _ _ _) = Just l
-        checkTarg l@(CoreTargWriter _ _) = Just l
-        checkTarg _ = Nothing
+        checkLine :: (Bool -> Cont Bool (CoreLine ())) -> CoreLine () -> Cont Bool (CoreLine ())
+        checkLine cc (CoreTargReader _ _ _) = cc True
+        checkLine cc (CoreTargWriter _ _) = cc True
+        checkLine _ l = return l
 
 injectAssignments :: Core a -> KaosM (Core ())
 injectAssignments = mapCoreLinesM injectOne
