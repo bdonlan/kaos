@@ -29,11 +29,11 @@ mapCoreLinesM f = mapCoreM (\l _ -> do { l' <- f l; return (l', ()) })
 mapCoreM    :: forall a b m. Monad m
             => (CoreLine b -> a -> m (CoreLine b, b))
             -> (Core a -> m (Core b))
-mapCoreM f = editCoreCtxM id m'
+mapCoreM f (CB xs) = liftM CB $ mapM process xs
     where
-        m' e mark es = do
-            (e', mark') <- f e mark
-            return ( [(e', mark')], es )
+        process (l, mark) = do
+            l' <- recurseLineM (mapCoreM f) l
+            f l' mark
 
 -- |Transform the given core line by applying the given function to any
 --  deep blocks.
