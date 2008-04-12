@@ -163,4 +163,4 @@ stripTarg = editLinesCtxM id stripOneTarg
         stripOneTarg' l = [l]
 
 targAssign :: Slot -> CoreLine a
-targAssign slot = CoreInlineAssign maxBound True slot [TokenLiteral "targ"]
+targAssign slot = CoreInlineAssign minBound True slot [TokenLiteral "targ"]
