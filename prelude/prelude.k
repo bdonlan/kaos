@@ -137,11 +137,11 @@ define windowright() returning numeric {
 }
 
 define pointer() returning agent {
-	_caos { .inline let $return = PNTR; };
+	_caos { .static let $return = PNTR; };
 }
 
 define null() returning agent {
-	_caos { .inline let $return = NULL; };
+	_caos { .static let $return = NULL; };
 }
 
 define stop() {
@@ -270,7 +270,7 @@ define floatto(agent a, agent target) {
 
 define owner() returning agent {
 	_caos {
-		.inline let $return = OWNR;
+		.static let $return = OWNR;
 	};
 }
 

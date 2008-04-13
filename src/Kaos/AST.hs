@@ -109,7 +109,10 @@ data InlineCAOSLine l =
   | ICTargWriter l [InlineCAOSLine l]
   | ICLoop [InlineCAOSLine l]
   | ICKaos (Statement l)
-  | ICLValue Int l [InlineCAOSToken l]
+  | ICLValue { iclLevel  :: Int 
+             , iclSymbol :: l
+             , iclString :: [InlineCAOSToken l]
+             }
   | ICTargZap
     deriving (Eq, Ord, Data, Typeable, Show)
 

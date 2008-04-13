@@ -456,12 +456,20 @@ caosTargZap = do
 
 caosInlineAssign :: Parser (InlineCAOSLine String)
 caosInlineAssign = do
-    try $ symbol "inline"
+    ilevel <- try $ headWord
     symbol "let"
     v1 <- caosVarName
     symbol "="
     repl <- many caosWord
-    return $ ICLValue minBound v1 repl
+    return $ ICLValue ilevel v1 repl
+    where
+        headWord = inl <|> stat
+        inl = do
+            symbol "inline"
+            return maxBound
+        stat = do
+            symbol "static"
+            return 0
 
 caosKaos :: Parser (InlineCAOSLine String)
 caosKaos = do

@@ -121,10 +121,10 @@ renameILine (ICTargWriter vs body) =
     liftM2 ICTargWriter (lex2slot vs) (mapM renameILine body)
 renameILine (ICLoop body) = liftM ICLoop (mapM renameILine body)
 renameILine (ICKaos body) = liftM ICKaos (renameStatement body)
-renameILine (ICLValue _ l tokens) = do
+renameILine (ICLValue maxLevel l tokens) = do
     slot    <- lex2slot l
     tokens' <- mapM renameIToken tokens
-    level   <- asks rcLevel
+    level   <- asks (min maxLevel . rcLevel)
     return $ ICLValue level slot tokens'
 renameILine ICTargZap = return ICTargZap
 
