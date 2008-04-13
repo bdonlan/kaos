@@ -33,9 +33,16 @@ sub test_syntax {
 
 sub prep_re {
 	my $re = shift;
+	my $out;
 	my %seen;
-	$re =~ s/\s+/\\s+/g;
-	$re =~ s[\$(\d+)][$seen{$1}++ ? "\\$1" : '(VA\d\d)']ge;
+	while ($re =~ s/^([^\$]+)(?:\$(\d+)|$)//) {
+		my $pre = quotemeta($1);
+		my $n   = $2;
+		$pre =~ s/\s+/\\s+/g;
+		$out .= $pre;
+		last unless defined $n;
+		$out .= ($seen{$n}++ ? "\\$n" : '(VA\d\d)');
+	}
 	return $re;
 }
 
