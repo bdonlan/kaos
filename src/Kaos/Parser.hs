@@ -110,7 +110,7 @@ macroTypePrefix MacroRValue s = s
 
 
 macroBlock :: Parser KaosUnit
-macroBlock = do
+macroBlock = try constDecl <|> do
     reserved "define"
     mtyp <- macroType
     name <- liftM (macroTypePrefix mtyp) identifier
@@ -129,6 +129,22 @@ macroBlock = do
                                         , mbCode = code
                                         , mbRetType = retType
                                         }
+
+constDecl :: Parser KaosUnit
+constDecl = do
+    reserved "define"
+    ctyp <- typeName
+    when (ctyp == typeVoid) $ fail "Constants must not have a void type"
+    name <- identifier
+    reservedOp "="
+    cval <- expr
+    symbol ";"
+    return $ MacroBlock $ defaultMacro { mbName = name
+                                       , mbType = MacroRValue
+                                       , mbArgs = []
+                                       , mbCode = SExpr (EAssign (ELexical "return") cval)
+                                       , mbRetType = ctyp
+                                       }
 
 smallNatural :: forall i. (Integral i, Bounded i) => Parser i
 smallNatural = try gen <?> desc
