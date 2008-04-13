@@ -253,6 +253,23 @@ expToCore (EAssign e1 e2) = do
     s1 `sameType` s2
     emit $ CoreAssign s1 s2
     return s1
+expToCore (ECall "anim" (obj:nums)) = do
+    args <- sequence $ zipWith checkArgs nums [1..]
+    os <- expToCore obj
+    os `typeIs` typeObj
+    let l = h ++ args ++ t
+    emit $ CoreTargReader dummySlot os (CB $ [(CoreLine l, ())])
+    return dummySlot
+    where
+        h = [TokenLiteral "anim", TokenLiteral "["]
+        t = [TokenLiteral "]"]
+        checkArgs (EConst c@(CInteger i)) n
+            | i < 0 || i > 255
+            = compileError $ "Argument " ++ (show n) ++ " of anim is out of range; " ++ (show i) ++ " is not between 0 and 255"
+            | otherwise
+            = return $ TokenConst c
+        checkArgs _ n = compileError $ "Argument " ++ (show n) ++ " of anim is invalid; must be a constant integer."
+
 expToCore (ECall "print" []) = 
     return $ error "XXX: void return"
 expToCore (ECall "print" (x:xs)) = do
