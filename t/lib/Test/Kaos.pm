@@ -35,15 +35,23 @@ sub prep_re {
 	my $re = shift;
 	my $out;
 	my %seen;
-	while ($re =~ s/^([^\$]+)(?:\$(\d+)|$)//) {
+	$re =~ s/^\s*//s;
+	$re =~ s/\s*$//s;
+	while ($re =~ s/^([^\$\s]*)(?:\$(\d+)|(\s+)|$)//s) {
 		my $pre = quotemeta($1);
 		my $n   = $2;
+		my $ws  = $3;
 		$pre =~ s/\s+/\\s+/g;
 		$out .= $pre;
-		last unless defined $n;
-		$out .= ($seen{$n}++ ? "\\$n" : '(VA\d\d)');
+		if (defined $n) {
+			$out .= ($seen{$n}++ ? "\\$n" : '(VA\d\d)');
+		} elsif (defined ($ws)) {
+			$out .= q{\s+};
+		} else {
+			last;
+		}
 	}
-	return $re;
+	return $out;
 }
 
 sub hashp_str {
