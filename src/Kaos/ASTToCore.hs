@@ -218,7 +218,7 @@ binaryOps' = [
     ("subv", [numBinOp "subv" (-) (-)]),
     ("mulv", [numBinOp "mulv" (*) (*)]),
     ("divv", [numBinOp "divv" (/) div]),
-    ("andv", [intBinOp "addv" (.&.)]),
+    ("andv", [intBinOp "andv" (.&.)]),
     ("orrv", [intBinOp "orrv" (.|.)])
     ]
 
