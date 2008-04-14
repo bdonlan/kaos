@@ -1,0 +1,87 @@
+Kaos's compilation pipeline consists of a series of transformations
+on polymorphically-typed tree structures. Theoretically transformations
+which do not alter the type of the structure do not alter the semantics
+of the code, but in practice many (a -> a) transformations remove
+non-normal forms that would result in errors if passed to later passes.
+
+Common code tree types:
+  AST.hs: Statement a, Expression a, and related.
+    These represent a parse tree with variables represented by type 'a'.
+    Initially a will be String, and after renaming this is replaced by
+    Slot. (see below)
+  Core.hs: Core a, CoreBlock a, CoreLine a
+    Core is an intermediate data structure closely related to the final
+    CAOS output, but with additional annotations useful for optimization.
+    CoreLines /very approximately/ correspond to CAOS commands, however
+    there are cases of CoreLine values which do not result in CAOS\
+    output, or CAOS output which does not directly appear (in its final
+    form, anyway) in the Core.
+    Core a and CoreBlock a are equivalent; they each have a list of
+    CoreLines, each with an annotation of type a. When no annotation is
+    needed, a is set to ().
+  CAOS.hs: CAOS a, CAOSLine a, etc
+    CAOS corresponds directly to the final CAOS output, parameterized on
+    the type of register representation (CAOSRegister/VirtRegister).
+
+Register/variable types:
+  String (used in AST types): String variable names. Not much to it
+    really. Eliminated in the Renaming phase.
+  Slot (used in AST and Core):
+    Slots are a high-level view of an unnamed variable. In storage 
+    analysis phases, constant folding, register aliasing, etc, are
+    done in terms of slots. In particular, there is no 1:1
+    correspondance between slots and caos registers.
+  VirtRegister (used in Core analysis phases and CAOS):
+    A virtregister corresponds precisely to some CAOS register, but
+    multiple virtregisters may correspond to the same caos register.
+    RegAlloc.hs ensures that no two virtregisters using the same
+    caosregister will be in use at the same time.
+  CAOSRegister (used in CAOS): Corresponds precisely to some VAxx
+    register.
+
+Transformation phases (sequenced in Compile.hs):
+  preRenameTransforms: Various AST-level transformations on
+    (Statement String)
+  renameLexicals: Allocates Slots to variables, and expands out macros.
+  postRenameTransforms: Various AST-level transformations on
+    (Statement Slot)
+  astToCore: Generates Core out of AST elements; this is where new
+    language builtins will generally go.
+  performFolding: Performs constant folding
+  stripFolds: Eliminates folding annotations; this is seperate from
+    performFolding as the former can be disabled by -dno-folding, but
+    stripFolds must be invoked, as later phases cannot handle it.
+  inlineAnalysis: Marks inlined RValues that depend on targ before
+    targ processing eliminates that information.
+  targExpand, stripTarg: Merges targ blocks, applies "TARG x" and
+    "SETA v TARG" where necessary, then removes the targ annotations
+    from the core.
+  inlineValues: Propagates inlinable rvalues forward.
+  coreToVirt: Converts Core into CAOS VirtRegister
+  regAlloc: Converts CAOS VirtRegister to CAOS CAOSRegister
+  emitCaos: Emits a string out of CAOS CAOSRegister
+
+Annotation phases (used in various places):
+  markAccess: Annotates Core with a map indicating which Slots it
+    accesses. This is split out into a seperate phase to avoid recursion
+    between it and markFuture/markStorage, which it calls into as well.
+  markFuture: Annotates each CoreLine with a map indicating which Slots
+    will be used /after/ that line, and how. Note that this annotation
+    refers to the /value/ in the slot, not the slot itself; eg, if
+    the next operation replaces the value in slot A, then there will
+    be no entry for slot A in the future map.
+  markStorage: Annotates each CoreLine with a map indicating which Slots
+    will be stored into which VirtRegisters, or if they will have a
+    constant value instead.
+
+Error reporting:
+  compileError, warning: Does what they say on the box.
+  checkpoint: When an error occurs, execution will fall back to the
+    enclosing checkpoint, then return the passed-in placeholder value.
+    This hopefully allows multiple user errors to be reported. Note that
+    internal errors (reported via fail) will not be reported after any
+    compile error at all occurs.
+  commitFail: If an error occured, and execution fell back to a
+    checkpoint, then upon reaching a commitFail, compilation will
+    actually be aborted. This should be placed to avoid meaningless
+    additional errors from being generated.
