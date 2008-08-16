@@ -271,11 +271,17 @@ checkConstLine l@(CoreLine t) storage = do
     mapM_ checkTok t
     return (l, storage)
     where
-        checkTok (TokenConstSlot s) = checkStorage s (M.lookup s (getSM storage))
+        checkTok (TokenConstSlot s rc) =
+            checkStorage s (M.lookup s (getSM storage)) rc
         checkTok _ = return ()
-        checkStorage _ (Just (Const _)) = return ()
-        checkStorage _ Nothing = return () -- will be reported in CoreToVirt
-        checkStorage _ (Just Phantom) = internalError "Phantom storage found where constant expected (what does this mean??)"
-        checkStorage _ _ = compileError "Constant value expected"
+        checkStorage _ (Just (Const v)) rc = do
+            case rc v of
+                Nothing -> return ()
+                Just s -> compileError s
+        checkStorage _ Nothing _ =
+            return () -- will be reported in CoreToVirt
+        checkStorage _ (Just Phantom) _ =
+            internalError "Phantom storage found where constant expected (what does this mean??)"
+        checkStorage _ _ _ = compileError "Constant value expected"
 
 checkConstLine l s = return (l, s)

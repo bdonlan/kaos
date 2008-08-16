@@ -101,7 +101,18 @@ astToCore' (SFlush level) = emit $ CoreInlineFlush level
 astToCore' (SScriptHead ex) = do
     sx <- mapM expToCore ex
     mapM_ (`typeIs` typeNum) sx
-    emit $ CoreLine ([TokenLiteral "SCRP"] ++ (map TokenConstSlot sx))
+    emit $ CoreLine ([TokenLiteral "SCRP"] ++ (zipWith TokenConstSlot sx ranges))
+    where
+        ranges = [r8, r8, r8, r16]
+        r8 = checkRange (0,255)
+        r16 = checkRange (0,65535)
+        checkRange r@(lo, hi) (CInteger v)
+            | v >= lo && v <= hi
+            = Nothing
+            | otherwise
+            = Just $ "Value " ++ (show v) ++ " out of range; expected " ++ show r
+        checkRange _ t
+            = Just $ "Internal error; unexpected constant type " ++ show t
 
 emitILine :: KaosDiagM m => InlineCAOSLine Slot -> CoreWriter m ()
 emitILine (ICAssign v1 v2) = do
@@ -297,7 +308,7 @@ expToCore (ECall "__const" [e]) = do
     let t = slotType s
     s' <- newSlot t
     v <- assignVerb t
-    emit $ CoreLine [TokenLiteral v, TokenSlot (SA s' WriteAccess), TokenConstSlot s]
+    emit $ CoreLine [TokenLiteral v, TokenSlot (SA s' WriteAccess), TokenConstSlot s (const Nothing)]
     return s'
     where
         assignVerb t

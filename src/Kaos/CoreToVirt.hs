@@ -63,7 +63,7 @@ transLine line@(CoreLine l) = do
         transToken (TokenLiteral ts) = return $ CAOSLiteral ts
         transToken (TokenConst c) = return $ CAOSConst c
         transToken (TokenSlot (SA slot _)) = lookupStorage slot >>= transStorage slot
-        transToken (TokenConstSlot slot) = do
+        transToken (TokenConstSlot slot _) = do
             v <- (lookupStorage slot >>= transStorage slot)
             case v of
                 CAOSRegister _ -> internalError "TokenConstSlot with register at emit stage"

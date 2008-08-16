@@ -41,9 +41,9 @@ amEmpty = AM $ M.empty
 lineAccess :: CoreLine AccessMap -> KaosM AccessMap
 lineAccess (CoreLine tokens) = do
         return . mconcat $ map findAccess tokens
-    where findAccess (TokenSlot sa)     = amFromSA sa
-          findAccess (TokenConstSlot s) = amSingle s ReadAccess
-          findAccess _                  = mempty
+    where findAccess (TokenSlot sa)         = amFromSA sa
+          findAccess (TokenConstSlot s _)   = amSingle s ReadAccess
+          findAccess _                      = mempty
 lineAccess (CoreTouch sa) = return $ amFromSA sa
 
 
