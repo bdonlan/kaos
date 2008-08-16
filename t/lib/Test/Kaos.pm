@@ -72,9 +72,9 @@ sub test_output {
 	}
 	$out = "\n$out\n";
 	if($out =~ /$re/si) {
-		ok(1, $desc);
+		ok(1, $desc) if $res;
 	} else {
-		ok(0, $desc);
+		ok(0, $desc) if $res;
 		print "# Expected:\n";
 		print hashp_str($_[2]);
 		print "# Got:\n";
