@@ -145,7 +145,7 @@ constDecl = do
                                        , mbCode = SExpr (EAssign (ELexical "return") cval)
                                        , mbRetType = ctyp
                                        }
-
+{-
 smallNatural :: forall i. (Integral i, Bounded i) => Parser i
 smallNatural = try gen <?> desc
     where
@@ -161,21 +161,25 @@ smallNatural = try gen <?> desc
         maxN = maxBound
         maxI = toInteger maxN
         desc = "integer (" ++ (show minN) ++ ".." ++ (show maxN) ++ ")"
+-}
 
 agentScript :: Parser KaosUnit
 agentScript = do
     reserved "script"
+    pos <- getPosition
     symbol "("
-    fmly <- smallNatural
+    fmly <- expr
     symbol ","
-    gnus <- smallNatural
+    gnus <- expr
     symbol ","
-    spcs <- smallNatural
+    spcs <- expr
     symbol ","
-    scrp <- smallNatural
+    scrp <- expr
     symbol ")"
     code <- braces bareBlock
-    return $ AgentScript fmly gnus spcs scrp code
+    let ctx = SContext (KaosContext (sourceName pos) (sourceLine pos))
+    let hblk = ctx $ SScriptHead [fmly, gnus, spcs, scrp]
+    return $ AgentScript hblk code
     
 
 whiteSpace :: Parser ()

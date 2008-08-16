@@ -99,7 +99,8 @@ data Statement l =
   | SDeclare    CAOSType [(l, (Maybe (Expression l)))]
   | SIterCall   String [Expression l] [String] (Statement l)
   | SFlush      Int
-    deriving (Eq, Ord, Data, Typeable, Show)
+  | SScriptHead [Expression l]
+  deriving (Eq, Ord, Data, Typeable, Show)
 
 data InlineCAOSLine l =
     ICAssign l l

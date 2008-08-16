@@ -77,10 +77,7 @@ data KaosUnit = InstallScript (Statement String)
                             , ovIndex   :: Maybe Int
                             , ovType    :: CAOSType
                             }
-              | AgentScript { asFamily  :: !Word8
-                            , asGenus   :: !Word8
-                            , asSpecies :: !Word16
-                            , asScript  :: !Word16
+              | AgentScript { asHead    :: Statement String
                             , asCode    :: Statement String
                             }
               deriving (Show)

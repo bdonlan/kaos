@@ -108,6 +108,7 @@ renameStatement (SIterCall name args argNames block) = do
                                                    else mbContext m n )
                             }
             fmap SExpr $ renameMacro mmacro args
+renameStatement (SScriptHead ex) = fmap SScriptHead $ mapM renameExpr ex
 
 renameILine :: InlineCAOSLine String -> RenameT (InlineCAOSLine Slot)
 renameILine (ICAssign v1 v2) = liftM2 ICAssign (lex2slot v1) (lex2slot v2)

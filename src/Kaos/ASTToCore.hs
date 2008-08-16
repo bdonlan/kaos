@@ -98,7 +98,10 @@ astToCore' (SInstBlock stmt) = do
     emit $ CoreLine [TokenLiteral "SLOW"]
 astToCore' (SIterCall _ _ _ _) = fail "late SIterCall"
 astToCore' (SFlush level) = emit $ CoreInlineFlush level
-
+astToCore' (SScriptHead ex) = do
+    sx <- mapM expToCore ex
+    mapM_ (`typeIs` typeNum) sx
+    emit $ CoreLine ([TokenLiteral "SCRP"] ++ (map TokenConstSlot sx))
 
 emitILine :: KaosDiagM m => InlineCAOSLine Slot -> CoreWriter m ()
 emitILine (ICAssign v1 v2) = do
