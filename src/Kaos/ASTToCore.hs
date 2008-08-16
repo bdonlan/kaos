@@ -289,6 +289,23 @@ expToCore (ECall "__touch" [e]) = do
     s <- expToCore e
     emit $ CoreTouch (SA s MutateAccess)
     return s
+expToCore (ECall "__const" [e]) = do
+    s <- expToCore e
+    let t = slotType s
+    s' <- newSlot t
+    v <- assignVerb t
+    emit $ CoreLine [TokenLiteral v, TokenSlot (SA s' WriteAccess), TokenConstSlot s]
+    return s'
+    where
+        assignVerb t
+            | t == typeNum
+            = return "setv"
+            | t == typeStr
+            = return "sets"
+            | t == typeObj
+            = return "seta"
+            | otherwise
+            = compileError "bad type for assign in __const"
 
 expToCore (ECall s _) = compileError $ "Unknown macro or builtin " ++ show s
 
@@ -311,4 +328,3 @@ expToCore (EStmt slot code) = do
         Nothing -> do
             s <- newSlot typeVoid
             return s
-

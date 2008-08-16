@@ -95,6 +95,7 @@ finishCompile' c = return c                 >>=
     markFuture                              >>=
     markStorage                             >>=
     dumpFlagged "dump-marked-core" dumpCore >>=
+    checkConstStorage                       >>=
     coreToVirt                              >>=
     commitFail                              >>=
     regAlloc                                >>=

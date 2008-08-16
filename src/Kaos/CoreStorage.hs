@@ -15,7 +15,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-module Kaos.CoreStorage (markStorage, Storage(..), StorageS(..), StorageMap, getSM) where
+module Kaos.CoreStorage (markStorage, Storage(..), StorageS(..), StorageMap, getSM, checkConstStorage) where
 
 import Kaos.Core
 import Kaos.Slot
@@ -32,6 +32,7 @@ import Kaos.AST
 import Control.Monad.Reader
 import Kaos.Dump
 import Kaos.CoreInline (inlineFallback)
+import Kaos.CoreTraverse
 
 import qualified Data.Map as M
 
@@ -195,7 +196,6 @@ markLine l@(CoreLoop body) = do
                 Just (Private r) -> return (slot, Just $ Bound r)
                 Nothing -> return (slot, Nothing)
                 _ -> fail $ "Coreloop, bad fixreg storage " ++ show stor
-        
 
 
 markLine l@(CoreCond cond ontrue_ onfalse_) = do
@@ -237,7 +237,7 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
                     Just (Private st) <- getStorage slot
                     return [(slot, Bound st)]
                 (x, _) -> fail $ "trying to bind a shared slot: " ++ show (slot, x, acc, fmap (const ()) l)
-        
+
 markLine (CoreFoldable folder body) = do
     body' <- markLine body
     return $ CoreFoldable folder body'
@@ -257,3 +257,25 @@ markLine (CoreInlineFlush l) = return $ CoreInlineFlush l
 markLine l@(CoreInlineAssign level targUser dest repl) = do
     markLine $ inlineFallback l
     return $ CoreInlineAssign level targUser dest repl
+
+checkConstStorage :: Core StorageS -> KaosM (Core StorageS)
+checkConstStorage l = do
+    saveCtx $ mapCoreM checkConstLine l
+    return l
+
+checkConstLine :: CoreLine StorageS -> StorageS -> KaosM (CoreLine StorageS, StorageS)
+checkConstLine l@(CoreNote (ContextNote cx)) s = do
+    putCtx (Just cx)
+    return (l, s)
+checkConstLine l@(CoreLine t) storage = do
+    mapM_ checkTok t
+    return (l, storage)
+    where
+        checkTok (TokenConstSlot s) = checkStorage s (M.lookup s (getSM storage))
+        checkTok _ = return ()
+        checkStorage _ (Just (Const _)) = return ()
+        checkStorage _ Nothing = return () -- will be reported in CoreToVirt
+        checkStorage _ (Just Phantom) = internalError "Phantom storage found where constant expected (what does this mean??)"
+        checkStorage _ _ = compileError "Constant value expected"
+
+checkConstLine l s = return (l, s)

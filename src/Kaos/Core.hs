@@ -42,6 +42,7 @@ data CoreToken =
     TokenLiteral String
   | TokenSlot    (GenAccess Slot)
   | TokenConst   ConstValue
+  | TokenConstSlot Slot
   deriving (Data, Typeable)
 
 -- XXX: needs to go in AST
@@ -55,6 +56,7 @@ instance Show CoreToken where
     show (TokenLiteral l) = map toUpper $ show l
     show (TokenSlot (SA s ac)) = "$" ++ (show s) ++ "(" ++ (shortAccess ac) ++ ")"
     show (TokenConst c) = "#" ++ show c
+    show (TokenConstSlot s) = "const$" ++ (show s)
 
 type Folder = (Slot -> Maybe ConstValue) -> Maybe [CoreLine ()]
 instance Show Folder where show _ = "(...)"
