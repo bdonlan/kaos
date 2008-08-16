@@ -28,6 +28,7 @@ import Data.Foldable (toList)
 
 import Kaos.AST
 import Kaos.ASTToCore
+import Kaos.CAOS
 import Kaos.Core
 import Kaos.CoreToVirt
 import Kaos.CoreAccess
@@ -43,6 +44,7 @@ import Kaos.Toplevel
 import Kaos.CoreInline
 import Kaos.KaosM
 import Kaos.PrettyM
+import Kaos.VirtRegister
 
 
 dumpFlagged :: String -> (t -> String) -> t -> KaosM t
@@ -87,9 +89,12 @@ compileCode' ctx parses = return parses     >>=
     commitFail
 
 finishCompile  :: MonadKaos m => Core () -> m String
-finishCompile = liftK . finishCompile'
-finishCompile' :: Core () -> KaosM String
-finishCompile' c = return c                 >>=
+finishCompile c = finishToVirt c >>= emitVirt
+
+finishToVirt :: MonadKaos m => Core () -> m (CAOS VirtRegister)
+finishToVirt = liftK . finishToVirt'
+finishToVirt' :: Core () -> KaosM (CAOS VirtRegister)
+finishToVirt' c = return c                  >>=
     markAccess                              >>=
     dumpFlagged "dump-access-core" dumpCore >>=
     markFuture                              >>=
@@ -97,7 +102,12 @@ finishCompile' c = return c                 >>=
     dumpFlagged "dump-marked-core" dumpCore >>=
     checkConstStorage                       >>=
     coreToVirt                              >>=
-    commitFail                              >>=
+    commitFail
+
+emitVirt :: MonadKaos m => CAOS VirtRegister -> m String
+emitVirt = liftK . emitVirt'
+emitVirt' :: CAOS VirtRegister -> KaosM String
+emitVirt' c = return c                      >>=
     regAlloc                                >>=
     commitFail                              >>=
     return . emitCaos
@@ -126,8 +136,14 @@ emitRemove iss = modify $
 compileUnit :: KaosUnit -> CompileM ()
 compileUnit (InstallScript s) = compileCode s >>= emitInstall
 compileUnit (RemoveScript s)  = compileCode s >>= emitRemove
+compileUnit (AgentScript (SContext c i) code) =
+    context c $ compileUnit (AgentScript i code)
 compileUnit (AgentScript blkHead code) = do
-    prelude <- compileCode blkHead >>= finishCompile
+    virt <- compileCode blkHead >>= finishToVirt
+    prelude <- emitVirt virt
+    case virt of
+        [CAOSLine [CAOSLiteral "scrp", CAOSConst _, CAOSConst _, CAOSConst _, CAOSConst _]] -> return ()
+        _ -> compileError "Side-effects not allowed in script classifier"
     buf <- compileCode code >>= finishCompile
     emitScript $ prelude ++ buf ++ "ENDM\n\n"
 compileUnit OVDecl{ ovName = name, ovIndex = Just idx, ovType = t }
