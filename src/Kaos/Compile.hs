@@ -142,8 +142,8 @@ compileUnit (AgentScript blkHead code) = do
     virt <- compileCode blkHead >>= finishToVirt
     prelude <- emitVirt virt
     case virt of
-        [CAOSLine [CAOSLiteral "scrp", CAOSConst _, CAOSConst _, CAOSConst _, CAOSConst _]] -> return ()
-        _ -> compileError "Side-effects not allowed in script classifier"
+        [CAOSLine [CAOSLiteral _, CAOSConst _, CAOSConst _, CAOSConst _, CAOSConst _]] -> return ()
+        _ -> compileError $ "Side-effects not allowed in script classifier"
     buf <- compileCode code >>= finishCompile
     emitScript $ prelude ++ buf ++ "ENDM\n\n"
 compileUnit OVDecl{ ovName = name, ovIndex = Just idx, ovType = t }
