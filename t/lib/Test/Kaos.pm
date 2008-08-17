@@ -59,6 +59,26 @@ sub hashp_str {
 	return join("\n", map { "# $_" } @l)."\n";
 }
 
+sub test_error {
+	my ($desc, $code, $re) = @_;
+	$re = qr//i unless defined $re;
+	my $in = $code;
+	my $out = '';
+	my $err = '';
+	my $res = runkaos(\$in, \$out, \$err);
+	if ($res) {
+		ok(0, "$desc - unexpectedly suceeded");
+	} else {
+		if ($err =~ /$re/si) {
+			ok(1, $desc);
+		} else {
+			ok(0, "$desc - wrong error message");
+			$err =~ s/^/# /g;
+			print "$err\n";
+		}
+	}
+}
+
 sub test_output {
 	my ($desc, $code, $re) = @_;
 	$re = prep_re($re) unless ref $re;

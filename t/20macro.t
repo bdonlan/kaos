@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use Test::Kaos;
-plan tests => 1;
+plan tests => 3;
 
 test_output("Constant expressions in script block", q[
 	define numeric tx = 42;
@@ -15,10 +15,12 @@ test_output("Constant expressions in script block", q[
 	ENDM
 });
 
-__END__
-
-## Can't test for error yet
 test_error("Reject non-constant expression in script block", q[
-	define numeric tx() { $return = norn.x; }
+	define tx() returning numeric { return = norn.x; }
 	script (tx, 1, 1, 1) { }
-]);
+], "constant value expected");
+
+test_error("Reject side-effecting expression in script block", q[
+	define tx() returning numeric { print(42); return = 42; }
+	script(tx, 1, 1, 1) { }
+], "side-effects not allowed");
