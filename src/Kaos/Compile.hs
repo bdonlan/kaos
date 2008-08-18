@@ -146,7 +146,7 @@ compileUnit (AgentScript blkHead code) = do
         _ -> compileError $ "Side-effects not allowed in script classifier"
     buf <- compileCode code >>= finishCompile
     emitScript $ prelude ++ buf ++ "ENDM\n\n"
-compileUnit OVDecl{ ovName = name, ovIndex = Just idx, ovType = t }
+compileUnit OVDecl{ ovName = name, ovIndex = Just idx, ovType = t, ovErrCtx = ectx }
     | idx < 0 || idx > 99
     = fail $ "Object variable index " ++ show idx ++ " is out of range"
     | otherwise
@@ -165,8 +165,8 @@ compileUnit OVDecl{ ovName = name, ovIndex = Just idx, ovType = t }
                                     , mbArgs    = [MacroArg "v" t, MacroArg "o" typeObj]
                                     , mbCode    = SICaos [ICLine setter]
                                     }
-        compileUnit $ MacroBlock getMacro
-        compileUnit $ MacroBlock setMacro
+        compileUnit $ MacroBlock ectx getMacro
+        compileUnit $ MacroBlock ectx setMacro
     where
         verb
             | t == typeNum
@@ -184,7 +184,7 @@ compileUnit d@OVDecl{} = do
     when (idx >= 100) $ fail "Out of object variable indexes; specify some explicitly"
     compileUnit $ d { ovIndex = Just idx }
 
-compileUnit (MacroBlock macro) = do
+compileUnit (MacroBlock ectx macro) = context ectx $ do
     lift $ dumpFlagged "dump-macros" show macro
     code' <- lift $ preRenameTransforms (mbCode macro)
     let macro' = macro { mbCode = code' }

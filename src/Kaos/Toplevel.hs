@@ -130,11 +130,12 @@ addMacroToCtx force m@Macro{mbRedefine = redef, mbName = name, mbArgs = args} ct
         newNameGrp = M.insert (length args) m oldNameGrp
 
 data KaosUnit = InstallScript (Statement String)
-              | MacroBlock  Macro
+              | MacroBlock KaosContext Macro
               | RemoveScript (Statement String)
               | OVDecl      { ovName    :: String
                             , ovIndex   :: Maybe Int
                             , ovType    :: CAOSType
+                            , ovErrCtx  :: KaosContext
                             }
               | AgentScript { asHead    :: Statement String
                             , asCode    :: Statement String

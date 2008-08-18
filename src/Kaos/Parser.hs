@@ -33,6 +33,11 @@ import Kaos.Core (mergeAccess)
 -- TODO: move mergeAccess to AST
 import Kaos.Toplevel
 
+getContext :: Parser KaosContext
+getContext = do
+    pos <- getPosition
+    return $ KaosContext (sourceName pos) (sourceLine pos)
+
 typeName :: Parser CAOSType
 typeName = (reserved "agent"    >> return typeObj)
         <|>(reserved "numeric"  >> return typeNum)
@@ -62,11 +67,12 @@ nullOp = do
 
 ovdecl :: Parser KaosUnit
 ovdecl = do
+    ctx <- getContext
     reserved "ovar"
     t <- typeName
     name <- identifier
     idx <- option Nothing $ fmap Just idxM
-    return $ OVDecl name idx t
+    return $ OVDecl name idx t ctx
     where
         idxM :: Parser Int
         idxM = do
@@ -112,6 +118,7 @@ macroTypePrefix MacroRValue s = s
 
 macroBlock :: Parser KaosUnit
 macroBlock = try constDecl <|> do
+    ctx <- getContext
     redef <- (reserved "define" >> return False) <|> (reserved "redefine" >> return True)
     mtyp <- macroType
     name <- liftM (macroTypePrefix mtyp) identifier
@@ -124,16 +131,17 @@ macroBlock = try constDecl <|> do
     when (retType /= typeVoid && mtyp /= MacroRValue) $
         fail "Non-rvalue macros must be void"
     code <- braces bareBlock
-    return $ MacroBlock $ defaultMacro  { mbName = name
-                                        , mbType = mtyp
-                                        , mbArgs = args
-                                        , mbCode = code
-                                        , mbRetType = retType
-                                        , mbRedefine= redef
-                                        }
+    return $ MacroBlock ctx $ defaultMacro  { mbName = name
+                                            , mbType = mtyp
+                                            , mbArgs = args
+                                            , mbCode = code
+                                            , mbRetType = retType
+                                            , mbRedefine= redef
+                                            }
 
 constDecl :: Parser KaosUnit
 constDecl = do
+    ctx <- getContext
     reserved "define"
     ctyp <- typeName
     when (ctyp == typeVoid) $ fail "Constants must not have a void type"
@@ -141,12 +149,12 @@ constDecl = do
     reservedOp "="
     cval <- expr
     symbol ";"
-    return $ MacroBlock $ defaultMacro { mbName = name
-                                       , mbType = MacroRValue
-                                       , mbArgs = []
-                                       , mbCode = SExpr (EAssign (ELexical "return") cval)
-                                       , mbRetType = ctyp
-                                       }
+    return $ MacroBlock ctx $ defaultMacro  { mbName = name
+                                            , mbType = MacroRValue
+                                            , mbArgs = []
+                                            , mbCode = SExpr (EAssign (ELexical "return") cval)
+                                            , mbRetType = ctyp
+                                            }
 {-
 smallNatural :: forall i. (Integral i, Bounded i) => Parser i
 smallNatural = try gen <?> desc
@@ -168,7 +176,7 @@ smallNatural = try gen <?> desc
 agentScript :: Parser KaosUnit
 agentScript = do
     reserved "script"
-    pos <- getPosition
+    ctx <- getContext
     symbol "("
     fmly <- expr
     symbol ","
@@ -179,8 +187,7 @@ agentScript = do
     scrp <- expr
     symbol ")"
     code <- braces bareBlock
-    let ctx = SContext (KaosContext (sourceName pos) (sourceLine pos))
-    let hblk = ctx $ SScriptHead [fmly, gnus, spcs, scrp]
+    let hblk = SContext ctx $ SScriptHead [fmly, gnus, spcs, scrp]
     return $ AgentScript hblk code
     
 
@@ -416,8 +423,8 @@ declaration = do
 
 statement :: Parser (Statement String)
 statement = do
-    pos <- getPosition
-    liftM (SContext (KaosContext (sourceName pos) (sourceLine pos))) statement'
+    ctx <- getContext
+    liftM (SContext ctx) statement'
 
 statement' :: Parser (Statement String)
 statement' = inlineCAOS
