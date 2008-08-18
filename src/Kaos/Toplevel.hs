@@ -26,17 +26,22 @@ module Kaos.Toplevel (
     MacroContext,
     Data.Word.Word8,
     Data.Word.Word16,
+    addMacroToCtx,
+    macroPrototype
 ) where
 
 import Data.Word (Word8, Word16)
+import Data.List
+import Data.Maybe
+import Control.Monad
 
 import Kaos.AST
 import Kaos.Slot
+import Kaos.KaosM
 import qualified Data.Map as M
 
 data MacroArg = MacroArg    { maName    :: String
                             , maType    :: CAOSType
-                            , maDefault :: Maybe ConstValue
                             }
                             deriving (Show, Eq, Ord)
 
@@ -52,6 +57,7 @@ data Macro = Macro  { mbName    :: String
                     , mbRetType :: CAOSType
                     , mbLexVars :: M.Map String Slot
                     , mbContext :: MacroContext
+                    , mbRedefine:: Bool
                     }
 
 defaultMacro :: Macro
@@ -63,12 +69,65 @@ defaultMacro =
             , mbRetType = undefined
             , mbLexVars = M.empty
             , mbContext = undefined
+            , mbRedefine= False
             }
 
 instance Show Macro where
-    show (Macro n typ a c t l _) = "Macro { mbName = " ++ (show n) ++ ", mbType = " ++ (show typ) ++ ", mbArgs = " ++ (show a) ++ ", mbCode = " ++ (show c) ++ ", mbRetType = " ++ (show t) ++ ", mbLexVars = " ++ (show l) ++ " }"
+    show (Macro n typ a c t l _ r) = "Macro { mbName = " ++ (show n) ++ ", mbType = " ++ (show typ) ++ ", mbArgs = " ++ (show a) ++ ", mbCode = " ++ (show c) ++ ", mbRetType = " ++ (show t) ++ ", mbLexVars = " ++ (show l) ++ ", mbRedefine = " ++ (show r) ++ " }"
 
-type MacroContext = String -> Maybe Macro
+macroPrototype :: Macro -> String
+macroPrototype Macro{mbName = name, mbType = macroType, mbRetType = typ, mbArgs = args} =
+    "macro" ++ typPrefix ++ " " ++ name ++ "(" ++ argDesc ++ ")" ++ retndesc
+    where
+        typPrefix =
+            case macroType of
+                MacroRValue -> ""
+                MacroLValue -> " set"
+                MacroIterator iargs ->
+                    let iargdesc = concat $ intersperse ", " (map typedesc iargs)
+                    in " iterator(" ++ iargdesc ++ ")"
+        argDesc = concat $ intersperse ", " (map descOneArg args)
+        retndesc
+            | typ == typeVoid
+            = ""
+            | otherwise
+            = "returning " ++ typedesc typ
+        typedesc t
+            | t == typeNum
+            = "numeric"
+            | t == typeStr
+            = "string"
+            | t == typeObj
+            = "agent"
+            | t == typeVoid
+            = "void"
+            | t == typeAny
+            = "ANY"
+            | otherwise
+            = "INVALID:" ++ (show typ)
+        descOneArg (MacroArg argName argType)
+            = (typedesc argType) ++ " " ++ argName
+
+
+type MacroContext = M.Map String (M.Map Int Macro)
+
+addMacroToCtx :: KaosDiagM m => Bool -> Macro -> MacroContext -> m MacroContext
+addMacroToCtx force m@Macro{mbRedefine = redef, mbName = name, mbArgs = args} ctx
+    | name == "print" || name == "anim"
+    = compileError $ "Can't redefine " ++ name
+    | isJust replacing && not (redef || force)
+    = compileError $
+        "Won't redefine pre-existing macro:\n\t" ++ (macroPrototype $ fromJust replacing)
+    | not force && redef && isNothing replacing
+    = do
+        warning $ "Redefining a macro which previously didn't exist"
+        addMacroToCtx True m ctx
+    | otherwise
+    = return $ M.insert name newNameGrp ctx
+    where
+        oldNameGrp = fromJust (M.lookup name ctx `mplus` Just M.empty)
+        replacing = M.lookup (length args) oldNameGrp
+        newNameGrp = M.insert (length args) m oldNameGrp
 
 data KaosUnit = InstallScript (Statement String)
               | MacroBlock  Macro

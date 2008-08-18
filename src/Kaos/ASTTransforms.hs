@@ -27,6 +27,15 @@ import Data.Maybe
 import Kaos.AST
 import Kaos.KaosM
 import Kaos.Slot
+import Kaos.ASTToCore
+
+specialBuiltins :: Statement String -> Statement String
+specialBuiltins = everywhere (mkT fixCall)
+    where
+        fixCall :: Expression String -> Expression String
+        fixCall (ECall "print" ex) = EBuiltin builtinPrint ex
+        fixCall (ECall "anim" ex) = EBuiltin builtinANIM ex
+        fixCall e = e
 
 condDepth :: (Show t) => BoolExpr t -> Int
 condDepth (BCompare _ _ _) = 0
@@ -69,6 +78,7 @@ preRenameTransforms =
         foldNots .
         expandCasts .
         foldCasts .
+        specialBuiltins .
         id
     where
         check = everywhereM (mkM checkBool)

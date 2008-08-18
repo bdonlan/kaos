@@ -23,12 +23,28 @@ module Kaos.AST (
             constType, comparisonToCAOS, BoolExpr(..),
             Comparison(..), AccessType(..),
             InlineCAOSToken(..), InlineCAOSLine(..),
-            KaosContext(..)
+            KaosContext(..), Builtin(..)
             ) where
 
 import Data.List
+import Data.Dynamic
 import Data.Generics
 import Kaos.PrettyM
+
+data Builtin = BWrap String Dynamic -- HACK
+    deriving (Typeable)
+instance Show Builtin where
+    show (BWrap n _) = "builtin(" ++ (show n) ++ ")"
+instance Eq Builtin where
+    (==) (BWrap n1 _) (BWrap n2 _) = (n1 == n2)
+instance Ord Builtin where
+    compare (BWrap n1 _) (BWrap n2 _) = compare n1 n2
+
+instance Data Builtin where
+  toConstr _   = error "toConstr"
+  gunfold _ _  = error "gunfold"
+  dataTypeOf _ = mkNorepType "Kaos.AST.Builtin"
+
 
 data AccessType = NoAccess | ReadAccess | WriteAccess | MutateAccess
     deriving (Show, Ord, Eq, Data, Typeable)
@@ -69,6 +85,7 @@ data Expression l =
   | ELexical l
   | EAssign (Expression l) (Expression l)
   | ECall String [Expression l]
+  | EBuiltin Builtin [Expression l]
   | EStmt (Maybe l) (Statement l)
   | EBoolCast (BoolExpr l)
   deriving (Eq, Ord, Data, Typeable)
@@ -79,6 +96,7 @@ instance Show l => Show (Expression l) where
     show (ELexical l) = "l:" ++ show l
     show (EAssign e1 e2) = "assign:" ++ show (e1, e2)
     show (ECall s e) = "call:" ++ s ++ show e
+    show (EBuiltin (BWrap n _) a) = "builtin:" ++ n ++ ":" ++ show a
     show (EBoolCast c) = "bcast:" ++ (show c)
     show (EStmt l s) = "stmt:" ++ (show l) ++ ":" ++ show s
 

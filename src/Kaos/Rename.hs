@@ -37,8 +37,23 @@ data ReaderContext = RC { rcMacros :: MacroContext
 enterMacro :: MacroContext -> RenameT a -> RenameT a
 enterMacro mc = local (\s -> s { rcMacros = mc, rcLevel = succ $ rcLevel s })
 
-getMacro :: String -> RenameT (Maybe Macro)
-getMacro name = fmap ($ name) $ asks rcMacros
+getMacro :: String -> Int -> RenameT Macro
+getMacro name argc = do
+    macro <- tryGetMacro name argc
+    case macro of
+        Just m -> return m
+        Nothing -> do
+            ctx <- asks rcMacros
+            let macroGroup = fromMaybe M.empty (M.lookup name ctx)
+            when (M.null macroGroup) $
+                compileError $ "Unknown macro or builtin " ++ (show name)
+            let cand = map (\(_, m) -> "\t" ++ macroPrototype m) (M.toList macroGroup)
+            compileError $ unlines (("No matching macro for call to " ++ (show name) ++ "; candidates are:"):cand)
+
+tryGetMacro :: String -> Int -> RenameT (Maybe Macro)
+tryGetMacro name argc = do
+    ctx <- asks rcMacros
+    return (M.lookup name ctx >>= M.lookup argc)
 
 type RenameT = StateT (M.Map String Slot) (ReaderT ReaderContext KaosM)
 
@@ -84,30 +99,25 @@ renameStatement (SUntil c s) =
 renameStatement (SICaos l) = fmap SICaos $ mapM renameILine l
 renameStatement (SInstBlock s) = liftM SInstBlock $ renameStatement s
 renameStatement (SIterCall name args argNames block) = do
-    macroM <- getMacro ("iter:" ++ name)
-    case macroM of
-        Nothing -> compileError ("Unknown iterator macro " ++ name)
-        Just m  -> do
-            when ( (length argNames) /= (length $ miArgTypes $ mbType m)) $
-                compileError "Iteree block has the wrong number of arguments"
-            lexCtx <- get
-            macroCtx <- asks rcMacros
-            let innerArgs = zipWith (\argN typ -> MacroArg argN typ Nothing)
-                                    argNames
-                                    (miArgTypes $ mbType m)
-            let ymacro = defaultMacro   { mbName = "_yield"
-                                        , mbType = MacroLValue
-                                        , mbArgs = innerArgs
-                                        , mbCode = block
-                                        , mbRetType = typeVoid
-                                        , mbLexVars = lexCtx
-                                        , mbContext = macroCtx
-                                        }
-            let mmacro = m  { mbContext = (\n -> if (n == "_yield")
-                                                   then Just ymacro
-                                                   else mbContext m n )
-                            }
-            fmap SExpr $ renameMacro mmacro args
+    m <- getMacro ("iter:" ++ name) (length args)
+    when ( (length argNames) /= (length $ miArgTypes $ mbType m)) $
+        compileError "Iteree block has the wrong number of arguments"
+    lexCtx <- get
+    macroCtx <- asks rcMacros
+    let innerArgs = zipWith (\argN typ -> MacroArg argN typ)
+                            argNames
+                            (miArgTypes $ mbType m)
+    let ymacro = defaultMacro   { mbName = "_yield"
+                                , mbType = MacroLValue
+                                , mbArgs = innerArgs
+                                , mbCode = block
+                                , mbRetType = typeVoid
+                                , mbLexVars = lexCtx
+                                , mbContext = macroCtx
+                                }
+    newCtx <- addMacroToCtx True ymacro (mbContext m)
+    let mmacro = m  { mbContext = newCtx }
+    fmap SExpr $ renameMacro mmacro args
 renameStatement (SScriptHead ex) = fmap SScriptHead $ mapM renameExpr ex
 
 renameILine :: InlineCAOSLine String -> RenameT (InlineCAOSLine Slot)
@@ -153,12 +163,9 @@ renameExpr (EBoolCast e) = liftM EBoolCast $ renameCond e
 
 --renameExpr (ECall s e) = fmap (ECall s) $ mapM renameExpr e
 renameExpr (ECall name e) = do
-    macroM <- getMacro name
-    case macroM of
-        Nothing -> do
-            e' <- mapM renameExpr e
-            return $ ECall name e'
-        Just  m -> renameMacro m e
+    macroM <- getMacro name (length e)
+    renameMacro macroM e
+renameExpr (EBuiltin b ex) = fmap (EBuiltin b) (mapM renameExpr ex)
 renameExpr (EStmt result code) = liftM2 EStmt (liftMaybe lex2slot result) (renameStatement code)
 
 lexSwitch :: String
@@ -171,7 +178,7 @@ lexSwitch l prefix ifLex ifMacro = do
     case r of
         Just s -> ifLex s
         Nothing -> do
-            m <- getMacro $ prefix ++ l
+            m <- tryGetMacro (prefix ++ l) 0
             case m of 
                 Just (Macro{}) -> ifMacro (ECall l [])
                 _ -> notInScope l
@@ -200,13 +207,8 @@ renameMacro macro e = do
             return (slot, SExpr $ EAssign (ELexical slot) rexpr)
         instantiateVars prefix argMap [] [] = return (prefix, argMap)
         instantiateVars _ _ [] (_:_) = compileError $ "Too many args for macro '" ++ name ++ "'"
-        instantiateVars prefix argMap (harg:args) []
-            | isJust $ maDefault harg
-            = instantiateVars (constSetter:prefix) argMap args []
-            | otherwise
-            = compileError $ "Too few args for macro '" ++ name ++ "'"
-            where
-                constSetter = SExpr (EAssign (ELexical (maName harg)) (EConst (fromJust $ maDefault harg)))
+        instantiateVars _ _ (_:_) []
+            = internalError $ "Too few args for macro '" ++ name ++ "'"
         instantiateVars prefix argMap (harg:args) (hexp:exps) = do
             instantiateVars prefix (M.insert (maName harg) hexp argMap) args exps
 
@@ -235,7 +237,7 @@ registerVar :: CAOSType -> String -> RenameT Slot
 registerVar t name = do
     s <- get
     oldVar <- lex2slot' name
-    oldMacro <- getMacro name
+    oldMacro <- tryGetMacro name 0
     case (oldVar, oldMacro) of
         (Just _, _) -> warning $
             "Declaration of " ++ name ++ " shadows previously declared variable"

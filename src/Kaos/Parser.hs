@@ -87,7 +87,8 @@ macroArg = do
     typ  <- typeName
     name <- identifier
     defaultval <- option Nothing argDefaultNote
-    return $ MacroArg name typ defaultval
+    return $ defaultval -- XXX
+    return $ MacroArg name typ --defaultval
 
 argDefaultNote :: Parser (Maybe ConstValue)
 argDefaultNote = do
@@ -111,14 +112,14 @@ macroTypePrefix MacroRValue s = s
 
 macroBlock :: Parser KaosUnit
 macroBlock = try constDecl <|> do
-    reserved "define"
+    redef <- (reserved "define" >> return False) <|> (reserved "redefine" >> return True)
     mtyp <- macroType
     name <- liftM (macroTypePrefix mtyp) identifier
     args <- parens (commaSep macroArg)
-    when (([] /=)
-         .filter (isNothing . maDefault)
-         .dropWhile (isNothing . maDefault)
-         $ args) $ fail "All default macro arguments must be at the end of the argument list"
+--    when (([] /=)
+--         .filter (isNothing . maDefault)
+--         .dropWhile (isNothing . maDefault)
+--         $ args) $ fail "All default macro arguments must be at the end of the argument list"
     retType <- option typeVoid (reserved "returning" >> typeName)
     when (retType /= typeVoid && mtyp /= MacroRValue) $
         fail "Non-rvalue macros must be void"
@@ -128,6 +129,7 @@ macroBlock = try constDecl <|> do
                                         , mbArgs = args
                                         , mbCode = code
                                         , mbRetType = retType
+                                        , mbRedefine= redef
                                         }
 
 constDecl :: Parser KaosUnit
@@ -235,7 +237,7 @@ lexer  = P.makeTokenParser
                               ]
          , reservedNames   = [
             -- toplevel
-            "install", "remove", "script", "define", "ovar",
+            "install", "remove", "script", "define", "redefine", "ovar",
             -- macros
             "set", "iterator",
             -- types

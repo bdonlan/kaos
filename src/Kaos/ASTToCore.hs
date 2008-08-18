@@ -15,16 +15,19 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
-module Kaos.ASTToCore (astToCore) where
+module Kaos.ASTToCore (astToCore, builtins, builtinANIM, builtinPrint) where
 
 import Kaos.Core
 import Kaos.AST
 import Kaos.Slot
 import Kaos.KaosM
+import Kaos.Toplevel
 import Control.Monad.Writer
 import Data.Generics
 import Data.Maybe
 import Data.Bits
+import Data.Dynamic
+import Data.Typeable
 import qualified Data.Map as M
 
 newtype CoreWriter m a = CW { unCW :: WriterT [CoreLine ()] m a }
@@ -37,6 +40,23 @@ instance KaosDiagM m => MonadWriter [CoreLine ()] (CoreWriter m) where
         tell m
     listen = CW . listen . unCW
     pass = CW . pass . unCW
+
+data BuiltinF =
+    BF (forall m. KaosDiagM m => [Expression Slot] -> CoreWriter m Slot)
+    deriving (Typeable)
+
+packBF :: String -> BuiltinF -> Builtin
+packBF name bf = BWrap name (toDyn bf)
+unpackBF :: Builtin -> BuiltinF
+unpackBF (BWrap name d) = fromDyn d err
+    where
+        err = BF $ \_ -> internalError ("builtin " ++ (show name) ++ " had wrong dyn type " ++ show d)
+
+builtinToCore :: KaosDiagM m => Builtin -> [Expression Slot] -> CoreWriter m Slot
+builtinToCore bf ex =
+    let (BF f) = unpackBF bf
+    in  f ex
+
 
 typeIs :: KaosDiagM m => Slot -> CAOSType -> m ()
 typeIs (Slot _ _ ct') ct
@@ -267,61 +287,8 @@ expToCore (EAssign e1 e2) = do
     s1 `sameType` s2
     emit $ CoreAssign s1 s2
     return s1
-expToCore (ECall "anim" (obj:nums)) = do
-    args <- sequence $ zipWith checkArgs nums [1..]
-    os <- expToCore obj
-    os `typeIs` typeObj
-    let l = h ++ args ++ t
-    emit $ CoreTargReader dummySlot os (CB $ [(CoreLine l, ())])
-    return dummySlot
-    where
-        h = [TokenLiteral "anim", TokenLiteral "["]
-        t = [TokenLiteral "]"]
-        checkArgs (EConst c@(CInteger i)) n
-            | i < 0 || i > 255
-            = compileError $ "Argument " ++ (show n) ++ " of anim is out of range; " ++ (show i) ++ " is not between 0 and 255"
-            | otherwise
-            = return $ TokenConst c
-        checkArgs _ n = compileError $ "Argument " ++ (show n) ++ " of anim is invalid; must be a constant integer."
-
-expToCore (ECall "print" []) = 
-    return $ error "XXX: void return"
-expToCore (ECall "print" (x:xs)) = do
-    s <- expToCore x
-    verb <- getVerb (slotType s)
-    emit $ CoreLine [TokenLiteral verb, TokenSlot (SA s ReadAccess)]
-    expToCore (ECall "print" xs)
-    where
-        getVerb t
-            | t == typeNum
-            = return "outv"
-            | t == typeStr
-            = return "outs"
-            | otherwise
-            = compileError "Bad type for print"
-expToCore (ECall "__touch" [e]) = do
-    s <- expToCore e
-    emit $ CoreTouch (SA s MutateAccess)
-    return s
-expToCore (ECall "__const" [e]) = do
-    s <- expToCore e
-    let t = slotType s
-    s' <- newSlot t
-    v <- assignVerb t
-    emit $ CoreLine [TokenLiteral v, TokenSlot (SA s' WriteAccess), TokenConstSlot s (const Nothing)]
-    return s'
-    where
-        assignVerb t
-            | t == typeNum
-            = return "setv"
-            | t == typeStr
-            = return "sets"
-            | t == typeObj
-            = return "seta"
-            | otherwise
-            = compileError "bad type for assign in __const"
-
-expToCore (ECall s _) = compileError $ "Unknown macro or builtin " ++ show s
+expToCore (EBuiltin b ex) = builtinToCore b ex
+expToCore e@(ECall _ _) = internalError $ "Late ECall: " ++ (show e)
 
 expToCore (EBoolCast c) = do
     c' <- evalCond c
@@ -342,3 +309,104 @@ expToCore (EStmt slot code) = do
         Nothing -> do
             s <- newSlot typeVoid
             return s
+
+
+-- ANIM and print are not registered in the builtins table as we currently do
+-- not support variadic macros
+builtinPrint :: Builtin
+builtinPrint = packBF "print" (BF builtinPrint')
+builtinPrint' :: KaosDiagM m => [Expression Slot] -> CoreWriter m Slot
+builtinPrint' [] = do
+    s <- newSlot typeVoid
+    return s
+builtinPrint' (x:xs) = do
+    s <- expToCore x
+    verb <- getVerb (slotType s)
+    emit $ CoreLine [TokenLiteral verb, TokenSlot (SA s ReadAccess)]
+    builtinPrint' xs
+    where
+        getVerb t
+            | t == typeNum
+            = return "outv"
+            | t == typeStr
+            = return "outs"
+            | otherwise
+            = compileError "Bad type for print"
+
+
+
+builtinANIM :: Builtin
+builtinANIM = packBF "anim" (BF builtinANIM')
+builtinANIM' :: KaosDiagM m => [Expression Slot] -> CoreWriter m Slot
+builtinANIM' [] = compileError "Empty animation string"
+builtinANIM' (obj:nums) = do
+    args <- sequence $ zipWith checkArgs nums [1..]
+    os <- expToCore obj
+    os `typeIs` typeObj
+    let l = h ++ args ++ t
+    emit $ CoreTargReader dummySlot os (CB $ [(CoreLine l, ())])
+    return dummySlot
+    where
+        h = [TokenLiteral "anim", TokenLiteral "["]
+        t = [TokenLiteral "]"]
+        checkArgs expr idx = do
+            s <- expToCore expr
+            return $ TokenConstSlot s (rangeCheck idx)
+        rangeCheck idx (CInteger n)
+            | n < 0 || n > 255
+            = Just $ "Argument " ++ (show idx) ++ " of anim is out of range; " ++ (show n) ++ " is not between 0 and 255"
+            | otherwise
+            = Nothing
+        rangeCheck idx _ = Just $ "Wrong type for argument " ++ (show idx) ++ " of anim"
+
+builtinTouch :: Builtin
+builtinTouch = packBF "__touch" (BF builtinTouch')
+builtinTouch' :: KaosDiagM m => [Expression Slot] -> CoreWriter m Slot
+builtinTouch' [e] = do
+    s <- expToCore e
+    emit $ CoreTouch (SA s MutateAccess)
+    return s
+builtinTouch' _ = internalError "wrong number of args for __touch late"
+builtinConst :: Builtin
+builtinConst = packBF "__const" (BF builtinConst')
+builtinConst' :: KaosDiagM m => [Expression Slot] -> CoreWriter m Slot
+builtinConst' [e] = do
+    s <- expToCore e
+    let t = slotType s
+    s' <- newSlot t
+    v <- assignVerb t
+    emit $ CoreLine [TokenLiteral v, TokenSlot (SA s' WriteAccess), TokenConstSlot s (const Nothing)]
+    return s'
+    where
+        assignVerb t
+            | t == typeNum
+            = return "setv"
+            | t == typeStr
+            = return "sets"
+            | t == typeObj
+            = return "seta"
+            | otherwise
+            = compileError "bad type for assign in __const"
+builtinConst' _ = internalError "wrong number of args for __const late"
+
+mWrap :: Builtin -> Statement String
+mWrap b = SExpr (EAssign (ELexical "return") (EBuiltin b [ELexical "value"]))
+
+builtinTbl :: [Macro]
+builtinTbl = [
+    defaultMacro    { mbName = "__touch"
+                    , mbType = MacroRValue
+                    , mbArgs = [MacroArg "value" typeAny]
+                    , mbCode = mWrap builtinTouch
+                    , mbRetType = typeAny
+                    , mbRedefine = False
+                    },
+    defaultMacro    { mbName = "__const"
+                    , mbType = MacroRValue
+                    , mbArgs = [MacroArg "value" typeAny]
+                    , mbCode = mWrap builtinConst
+                    , mbRetType = typeAny
+                    , mbRedefine = False
+                    }]
+builtins :: KaosDiagM m => m (MacroContext)
+builtins = foldM (flip (addMacroToCtx False)) M.empty builtinTbl

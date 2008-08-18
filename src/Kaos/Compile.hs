@@ -20,7 +20,6 @@ module Kaos.Compile (compile) where
 import Control.Monad.State
 
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.Map as M
 import Data.ByteString.Char8 (ByteString)
 import Data.Maybe
 import Data.Monoid
@@ -62,9 +61,9 @@ unlessSet flag f v = do
 compileCode :: Statement String -> CompileM (Core ())
 compileCode code = do
     st <- get
-    lift $ compileCode' (flip M.lookup $ csDefinedMacros st) code
+    lift $ compileCode' (csMacroCtx st) code
 
-dumpStmt :: Statement String -> String
+dumpStmt :: Show t => Statement t -> String
 dumpStmt = runPretty . prettyStatement
 
 compileCode' :: MacroContext -> Statement String -> KaosM (Core ())
@@ -74,6 +73,7 @@ compileCode' ctx parses = return parses     >>=
     renameLexicals ctx                      >>=
     commitFail                              >>=
     postRenameTransforms                    >>=
+    dumpFlagged "dump-final-ast" dumpStmt   >>=
     astToCore                               >>=
     commitFail                              >>=
     dumpFlagged "dump-early-core" dumpCore  >>=
@@ -115,12 +115,12 @@ emitVirt' c = return c                      >>=
 data CompileState = CS  { csInstallBuffer   :: Core ()
                         , csScriptBuffer    :: [ByteString]
                         , csRemoveBuffer    :: Core ()
-                        , csDefinedMacros   :: M.Map String Macro
+                        , csMacroCtx        :: MacroContext
                         , csOVIdx           :: Int
                         }
 type CompileM = StateT CompileState KaosM
-csEmpty :: CompileState
-csEmpty = CS (CB []) [] (CB []) M.empty 0
+csEmpty :: MacroContext -> CompileState
+csEmpty initMacros = CS (CB []) [] (CB []) initMacros 0
 
 emitInstall :: Core () -> CompileM ()
 emitInstall iss = modify $
@@ -156,13 +156,13 @@ compileUnit OVDecl{ ovName = name, ovIndex = Just idx, ovType = t }
         let getMacro = defaultMacro { mbName    = name
                                     , mbType    = MacroRValue
                                     , mbRetType = t
-                                    , mbArgs    = [MacroArg "o" typeObj Nothing]
+                                    , mbArgs    = [MacroArg "o" typeObj]
                                     , mbCode    = SICaos [ICLValue minBound "return" atok]
                                     }
         let setMacro = defaultMacro { mbName    = "set:" ++ name
                                     , mbType    = MacroLValue
                                     , mbRetType = typeVoid
-                                    , mbArgs    = [MacroArg "v" t Nothing, MacroArg "o" typeObj Nothing]
+                                    , mbArgs    = [MacroArg "v" t, MacroArg "o" typeObj]
                                     , mbCode    = SICaos [ICLine setter]
                                     }
         compileUnit $ MacroBlock getMacro
@@ -189,8 +189,9 @@ compileUnit (MacroBlock macro) = do
     code' <- lift $ preRenameTransforms (mbCode macro)
     let macro' = macro { mbCode = code' }
     s <- get
-    let inCtx = macro' { mbContext = flip M.lookup (csDefinedMacros s) }
-    put $ s { csDefinedMacros = M.insert (mbName inCtx) inCtx (csDefinedMacros s) }
+    let inCtx = macro' { mbContext = csMacroCtx s }
+    newCtx <- addMacroToCtx False inCtx (csMacroCtx s)
+    put $ s { csMacroCtx = newCtx }
 
 finalEmit :: CompileState -> KaosM BS.ByteString
 finalEmit st = do
@@ -202,5 +203,6 @@ finalEmit st = do
 
 compile :: [String] -> KaosSource -> IO (Maybe BS.ByteString)
 compile flags code = do
-    runKaosM flags $
-        finalEmit =<< execStateT (mapM_ compileUnit code) csEmpty
+    runKaosM flags $ do
+        ctx <- builtins
+        finalEmit =<< execStateT (mapM_ compileUnit code) (csEmpty ctx)
