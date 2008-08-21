@@ -210,12 +210,31 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
     put s
     onfalse' <- markBlock onfalse
     s_f <- get
-    let u1 = s_f `M.union` s_t `M.union` s
-    let u2 = s `M.union` s_t `M.union` s_f
+    --- In some cases, if a variable is initialized prior to entry, and is
+    --- both read and written in one of the two branches, only to die afterward;
+    --- it may not be pinned, and thus end up reallocated in one of the branches.
+    --- In the other branch it is dead (no future, but storage remains), but
+    --- the below assertion would be tripped anyway.
+    ---
+    --- To solve this, prune the storage state of all variables lost after this
+    --- branch.
+    ---
+    --- Note: We do not prune s (storage after conditional), but do ensure it
+    --- is subordinate (as it will always come logically before the true/false
+    --- branches, and cannot contain write/mutate ops; but may pin important
+    --- slots as alive). This means that the dead slots come back, but since
+    --- they are unreferenced this is safe as always
+    let [s_t', s_f'] = map (purgeDead trueFuture) [s_t, s_f]
+    let u1 = s_f' `M.union` s_t'
+    let u2 = s_t' `M.union` s_f'
     when (u1 /= u2) $ fail $ unlines["Storage states diverged:", dumpCoreLine (fmap (const()) l), dumpMap s_t, dumpMap s_f, dumpMap s, dumpMap future]
-    put u1
+    put (u1 `M.union` s)
     return $ CoreCond cond' ontrue' onfalse'
     where
+        purgeDead :: FutureS -> StorageMap -> StorageMap
+        purgeDead trueFuture storage =
+            M.filterWithKey (\k _ -> M.member k (getFuture trueFuture)) storage
+
         setupFuture :: FutureS -> MarkM (M.Map Slot Lookahead)
         setupFuture trueFuture = do
             let acc = M.toList . getAM $ getLineAccess trueFuture
@@ -224,9 +243,10 @@ markLine l@(CoreCond cond ontrue_ onfalse_) = do
             return $ M.fromList entries
         setupEntry future (s, acc) = do
             setupEntry' (s, acc) (M.lookup s future)
-        -- need to bind read slots to ensure they aren't improperly aliased
---        setupEntry' (slot, ReadAccess) _ = return []
-        setupEntry' _ Nothing            = return [] -- if we don't use it, it can go wherever (XXX: is this safe wrt underlying regalloc?)
+--        If a value is being set which will not be used in the future,
+--        it will die before the end of the block (and thus we don't care where
+--        we put it).
+        setupEntry' _ Nothing = return []
         setupEntry' (slot, acc) future = do
             curAcc <- getStorage slot
             case (curAcc, acc) of
