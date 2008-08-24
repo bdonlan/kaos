@@ -134,6 +134,7 @@ emitRemove iss = modify $
 
 
 compileUnit :: KaosUnit -> CompileM ()
+compileUnit (DocString _) = return ()
 compileUnit (InstallScript s) = compileCode s >>= emitInstall
 compileUnit (RemoveScript s)  = compileCode s >>= emitRemove
 compileUnit (AgentScript (SContext c i) code) =

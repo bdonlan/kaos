@@ -26,6 +26,7 @@ import Text.ParserCombinators.Parsec.Expr
 
 import Control.Monad
 import Data.Maybe
+import Data.Char
 import Kaos.AST
 --import Debug.Trace
 import Kaos.Emit (emitConst)
@@ -47,22 +48,32 @@ typeName = (reserved "agent"    >> return typeObj)
 
 root :: Parser KaosSource
 root =  many1 kaosUnit
-    <|> simpleScript
+    <|> (whiteSpace >> simpleScript)
 
 simpleScript :: Parser KaosSource
 simpleScript = liftM (\x -> [InstallScript x]) bareBlock
 
 kaosUnit :: Parser KaosUnit
-kaosUnit =  (installScript <?> "install script")
-        <|> (removeScript  <?> "removal script")
-        <|> (macroBlock    <?> "macro definition")
-        <|> (agentScript   <?> "normal script")
-        <|> (ovdecl        <?> "object variable declaration")
-        <|> (nullOp)
+kaosUnit = tlWhiteSpace >> kaosUnit' >>> tlWhiteSpace
+kaosUnit' :: Parser KaosUnit
+kaosUnit' = mzero
+         <|> (docString     <?> "documentation block")
+         <|> (installScript <?> "install script")
+         <|> (removeScript  <?> "removal script")
+         <|> (macroBlock    <?> "macro definition")
+         <|> (agentScript   <?> "normal script")
+         <|> (ovdecl        <?> "object variable declaration")
+         <|> (nullOp)
+
+docString :: Parser KaosUnit
+docString = do
+    try $ (tlWhiteSpace >> try (char '/' >> many1 (char '*')))
+    s <- manyTill anyChar (try $ many1 (char '*') >> char '/')
+    return $ DocString s
 
 nullOp :: Parser KaosUnit
 nullOp = do
-    reservedOp ";"
+    string ";"
     return $ InstallScript (SBlock [])
 
 ovdecl :: Parser KaosUnit
@@ -72,6 +83,7 @@ ovdecl = do
     t <- typeName
     name <- identifier
     idx <- option Nothing $ fmap Just idxM
+    string ";" -- don't skip whitespace, as this would consume docstrings
     return $ OVDecl name idx t ctx
     where
         idxM :: Parser Int
@@ -83,10 +95,10 @@ ovdecl = do
 
 
 installScript :: Parser KaosUnit
-installScript = reserved "install" >> liftM InstallScript (braces bareBlock)
+installScript = reserved "install" >> liftM InstallScript (tlBraces bareBlock)
 
 removeScript :: Parser KaosUnit
-removeScript  = reserved "remove" >> liftM RemoveScript (braces bareBlock)
+removeScript  = reserved "remove" >> liftM RemoveScript (tlBraces bareBlock)
 
 macroArg :: Parser MacroArg
 macroArg = do
@@ -130,7 +142,7 @@ macroBlock = try constDecl <|> do
     retType <- option typeVoid (reserved "returning" >> typeName)
     when (retType /= typeVoid && mtyp /= MacroRValue) $
         fail "Non-rvalue macros must be void"
-    code <- braces bareBlock
+    code <- tlBraces bareBlock
     return $ MacroBlock ctx $ defaultMacro  { mbName = name
                                             , mbType = mtyp
                                             , mbArgs = args
@@ -186,7 +198,7 @@ agentScript = do
     symbol ","
     scrp <- expr
     symbol ")"
-    code <- braces bareBlock
+    code <- tlBraces bareBlock
     let hblk = SContext ctx $ SScriptHead [fmly, gnus, spcs, scrp]
     return $ AgentScript hblk code
     
@@ -213,6 +225,30 @@ reservedOp :: String -> Parser ()
 reservedOp= P.reservedOp lexer
 braces :: Parser t -> Parser t
 braces    = P.braces lexer
+
+-- Skip whitespace, except for doc comments
+tlWhiteSpace :: Parser ()
+tlWhiteSpace = do
+        skipMany (simpleSpace <|> oneLineComment <|> multiLineNoDoc)
+        return ()
+    where
+        simpleSpace = skipMany1 (satisfy isSpace) >> return ()
+        oneLineComment = do
+            try $ string "//"
+            skipMany (satisfy (/= '\n'))
+            return ()
+        multiLineNoDoc = try $ do
+            string "/*"
+            satisfy (/= '*')
+            manyTill anyChar (try $ string "*/")
+            return ()
+
+tlBraces :: Parser a -> Parser a
+tlBraces m = do
+    symbol "{"
+    r <- m
+    string "}"
+    return r
 
 -- Do two things, return the first
 (>>>) :: Monad m => m a -> m b -> m a
@@ -452,7 +488,7 @@ bareBlock = do
     <?> "bare script"
 
 parser :: Parser KaosSource
-parser = whiteSpace >> root >>> eof
+parser = tlWhiteSpace >> root >>> eof
 
 
 inlineCAOS :: Parser (Statement String)

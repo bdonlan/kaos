@@ -140,6 +140,7 @@ data KaosUnit = InstallScript (Statement String)
               | AgentScript { asHead    :: Statement String
                             , asCode    :: Statement String
                             }
+              | DocString String
               deriving (Show)
 
 type KaosSource = [KaosUnit]
