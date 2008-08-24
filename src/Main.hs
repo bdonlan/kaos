@@ -148,7 +148,9 @@ loadPrelude :: Settings -> IO [KaosUnit]
 loadPrelude s = do
     if "no-implicit-prelude" `elem` debugFlags s
         then return []
-        else parseString "(internal prelude)" preludeStr
+        else do
+            prel <- mapM (uncurry $ parseString . ("internal "++)) preludeStr
+            return $ concat prel
 
 doCompile :: Settings -> IO ()
 doCompile s = do

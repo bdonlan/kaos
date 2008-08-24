@@ -32,12 +32,12 @@
 >	checkPreludeDirs
 >	removeDirectoryRecursive "gen"
 
-> loadPreludeSource :: IO (String, ClockTime)
+> loadPreludeSource :: IO ([(String, String)], ClockTime)
 > loadPreludeSource = do
 >   entries <- liftM sort $ getDirectoryContents preludeSrcDir
 >   l <- mapM (scanEnt . ((preludeSrcDir ++ "/")++)) entries
 >   let (strs, modTimes) = unzip $ concat l
->   return $ (concat strs, maximum modTimes)
+>   return $ (strs, maximum modTimes)
 >   where
 >     scanEnt e
 >       | not (".k" `isSuffixOf` e)
@@ -46,7 +46,7 @@
 >		= do
 >			contents <- readFile e
 >			modTime  <- getModificationTime e
->			return [(contents, modTime)]
+>			return [((e, contents), modTime)]
 
 > checkPrelude args buildflags = do
 >   checkPreludeDirs
@@ -60,7 +60,7 @@
 > genPrelude src = do
 >   writeFile preludePath $ unlines [
 >       "module Kaos.Prelude (preludeStr) where",
->       "preludeStr :: String",
+>       "preludeStr :: [(String, String)]",
 >       "preludeStr = " ++ show src
 >       ]
 
